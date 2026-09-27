@@ -142,18 +142,32 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: The image starts and answers
+      - name: The image starts, builds the city, and answers
         # A Dockerfile that builds is not the same as one that runs. This proves
-        # the entrypoint, the migration step and the worker processes together.
+        # the entrypoint, the snapshot replay, the migration step and the worker
+        # processes together.
+        #
+        # The assertion on `places` is the important part. This job used to check
+        # only that the container answered, which passed happily against a
+        # container serving an empty map -- the exact failure the whole snapshot
+        # design exists to make impossible. A boot is not a deployment.
         env:
           TABIKO_ENV: production
           TABIKO_JWT_SECRET: ci-only-secret-that-is-long-enough-to-pass-validation
         run: |
           docker run -d --name tabiko -p 8010:8010 tabiko:ci
-          for _ in $(seq 1 30); do
+          for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8010/health/live >/dev/null 2>&1; then
               echo "container is serving"
-              curl -fsS http://127.0.0.1:8010/stats
+              stats="$(curl -fsS http://127.0.0.1:8010/stats)"
+              echo "$stats"
+              places="$(echo "$stats" | python3 -c 'import json,sys; print(json.load(sys.stdin)["places"])')"
+              if [ "$places" -lt 1000 ]; then
+                echo "::error::the container is serving an empty city ($places places). The snapshot did not load."
+                docker logs tabiko
+                exit 1
+              fi
+              echo "container is serving $places places"
               exit 0
             fi
             sleep 2
@@ -165,3 +179,62 @@ jobs:
       - name: Teardown
         if: always()
         run: docker rm -f tabiko || true
+
+  snapshot:
+    name: City snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r backend/requirements-dev.txt
+
+      - name: The committed snapshot builds a real city
+        # The container smoke test proves the app runs. This proves the
+        # *reproducibility* claim: a clean checkout, no network, no API key, and
+        # still 7,000-odd places. It is the one thing CI genuinely can check
+        # about the data, and until the snapshot existed it could check nothing.
+        env:
+          TABIKO_JWT_SECRET: ci-only-secret-that-is-long-enough-to-pass-validation
+        working-directory: backend
+        run: |
+          python -m scripts.build_city
+          python - <<'PY'
+          import json, sqlite3, sys
+          connection = sqlite3.connect("tabiko.db")
+          places = connection.execute("select count(*) from restaurants").fetchone()[0]
+          head = connection.execute("select version_num from alembic_version").fetchone()[0]
+          connection.close()
+          record = json.load(open("data/city_provenance.json"))
+          print(f"built {places} places, schema at {head}")
+          if places < 1000:
+              sys.exit(f"the snapshot produced only {places} places")
+          if places != record["places_imported"]:
+              sys.exit(f"provenance claims {record['places_imported']} but the build made {places}")
+          PY
+
+      - name: The build is reproducible
+        # Twice into different files, compared by content. Determinism is the
+        # whole point of pinning a payload instead of pinning a date.
+        working-directory: backend
+        run: |
+          python -m scripts.build_city --database /tmp/again.db
+          python - <<'PY'
+          import hashlib, sqlite3
+          def fingerprint(path):
+              connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+              rows = list(connection.execute(
+                  "select source_id, name, latitude, longitude, cuisine_tags,"
+                  " type_tag, dietary_flags, good_for, accessibility_flags, address"
+                  " from restaurants order by source_id"))
+              connection.close()
+              return hashlib.sha256(repr(rows).encode()).hexdigest()
+          first, second = fingerprint("tabiko.db"), fingerprint("/tmp/again.db")
+          print(first, second)
+          if first != second:
+              raise SystemExit("two builds from one snapshot are not identical")
+          print("reproducible")
+          PY

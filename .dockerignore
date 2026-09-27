@@ -48,8 +48,14 @@ frontend/dist/
 #
 # `backend/data/` is deliberately kept: 348 KB of gzipped OSM payload plus a few
 # hundred bytes of provenance, and it is the source the city is built from.
-*.db
-*.db-shm
-*.db-wal
-*.sqlite
-*.sqlite3
+#
+# The `**/` is required and is easy to get wrong. Docker matches each pattern
+# against the whole relative path, and `*` does not cross a `/`, so a bare
+# `*.db` matches `./tabiko.db` and quietly lets `backend/tabiko.db` through --
+# which is how a 1.9 MB local database ended up baked into an image that had
+# `*.db` on the ignore list. Same trap as `.venv` above; check the nesting.
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.sqlite
+**/*.sqlite3

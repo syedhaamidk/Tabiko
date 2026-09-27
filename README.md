@@ -642,6 +642,78 @@ the columns the map returns, rebuilt only when the place table changes. It is a
 cache and nothing more: `tests/test_place_index.py` asserts, filter by filter,
 that it returns exactly the ids the database would.
 
+### Building the city
+
+The city is a build output, not a hand-made artifact:
+
+```bash
+cd backend
+python -m scripts.build_city              # build from the committed snapshot
+python -m scripts.build_city --verify     # diff a rebuild against the live data
+python -m scripts.build_city --refresh    # fetch current OSM, rewrite the pin
+```
+
+`backend/data/` holds `osm_snapshot.json.gz` (348 KB, the raw Overpass response)
+and `city_provenance.json` (the bbox, the digest, when it was fetched, how many
+places it produced). **A clean clone builds 7,683 places with no network, no API
+key, and no rate limit** — two builds from one snapshot produce byte-identical
+tables, verified by SHA-256 over every row.
+
+**The pin is the payload, not a date.** Two alternatives were tried and rejected
+on evidence:
+
+- *A pinned Overpass date.* A `[date:"..."]` query a year old against
+  overpass-api.de returns nothing, which is indistinguishable from a working
+  query over an empty area. The pin would have been an unverifiable claim.
+- *Re-running the query on every deploy.* The endpoints are free, shared and
+  rate-limited. While this was being written all three configured mirrors
+  returned 504, and a single city-wide query is the shape that gets rate-limited
+  — a 4×4 grid of 16 small queries each answered.
+
+Refreshing is therefore a deliberate act that can fail without breaking anything:
+`--refresh` only rewrites the snapshot after a complete success, so a failed run
+leaves the previous pin working.
+
+`--verify` is the honest check on all of it. It builds into a scratch database
+and reports what differs from the live one, separating **identity** drift (places
+new or gone, meaning OSM changed) from **attribute** drift (a place's cuisine or
+flags changed, meaning this project's derivation changed). Conflating the two
+makes both unreadable. It changes nothing.
+
+### Launching
+
+```bash
+docker compose up -d --build
+```
+
+That is a complete deployment: the image carries the snapshot, the entrypoint
+builds the city on first boot, and `docker compose down` followed by `up` finds
+the city already on the volume. `TABIKO_JWT_SECRET` must be set in the
+environment or `.env`; compose refuses to start without it, and the service
+would refuse anyway.
+
+**`TABIKO_DATABASE_URL` is the line that matters.** Without it the database
+lands at `/app/tabiko.db`, inside the container's own filesystem, so replacing
+the container throws away every dish, review and account a reader created. The
+compose file points it at a mounted volume.
+
+Three bugs in this path were found by deploying it rather than reading it, and
+all three are now tests:
+
+- `build_city` created its schema with `Base.metadata.create_all`, so `alembic
+  upgrade` hit *"table restaurants already exists"* on a genuinely fresh
+  database. It only looked fine locally because an existing database already
+  carried `alembic_version` at head. Migrations are now the only thing that
+  creates tables.
+- `build_city` ignored `TABIKO_DATABASE_URL` and always wrote to
+  `backend/tabiko.db`. Deployed with the database on a volume, it reported
+  *"imported 7683 places"* into one file while the service served an empty one
+  from the other — a healthy container showing an empty map.
+- `.dockerignore` used `*.db`, which Docker matches against the whole relative
+  path where `*` does not cross a `/`. A 1.9 MB local database was baked into
+  every image despite being on the ignore list. It needs `**/*.db`, the same
+  trap as `.venv` earlier in the same file.
+
 ### Scaling out
 
 `Dockerfile` and `docker/entrypoint.sh` run Alembic and then serve with one
@@ -823,9 +895,10 @@ regression got in while this section was being written.
 
 | Job | Checks |
 |---|---|
-| `backend` | Ruff lint and format, 241 tests, migrations match the models, and two guards that the app **refuses to import** without a real signing secret or with a short one |
+| `backend` | Ruff lint and format, 283 tests, migrations match the models, and two guards that the app **refuses to import** without a real signing secret or with a short one |
 | `frontend` | 100 tests, a production build (which regenerates the PWA icons), `npm audit --audit-level=high` |
-| `docker` | Builds the image, then runs it and waits for `/health/live`, so a Dockerfile that builds but cannot boot still fails. Note that this job checks out from git, so its container has **no database** and `/stats` reports `places: 0` — the check proves the image boots, not that it has anything to show |
+| `snapshot` | Builds the city from the committed snapshot on a clean checkout with no network, asserts the place count against the provenance record, and builds twice to prove the result is byte-identical |
+| `docker` | Builds the image, then runs it and waits for `/health/live`, so a Dockerfile that builds but cannot boot still fails. The container has no database and builds the city from the committed snapshot on first boot, so this also proves the snapshot is loadable and the entrypoint's build step works |
 
 The signing-secret guards matter more than they look: the published dev secret
 once fell back silently, and a test asserting the refusal is the only thing that
@@ -863,19 +936,24 @@ must fail rather than serve something stale.
   (see [Contributing a menu](#contributing-a-menu)) but nobody has used them, so
   the craving radar has no dish text to rank. The mechanism is built; the data is
   not there yet.
-- **The city is not reproducible, and CI cannot prove it is present.** The 7,728
-  places came from Overpass — every row records `source: "overpass"` — but the
-  query that fetched them is not in the repository, and the database is
-  gitignored. So a fresh clone, a CI build, and a clone-built container all start
-  **healthy and empty**: preflight passes, migrations apply, `/health/live`
-  returns 200, and `/stats` reports `{"places": 0}`. Nothing fails, because a
-  missing-data bug and a working deployment look identical from the outside.
-  The root `.dockerignore` deliberately does *not* exclude the database, so a
-  local image does contain the city — that is a temporary convenience with a real
-  caveat, and the caveat is written into the file.
-  The fix is an importer that rebuilds the database from a pinned bounding box
-  and a pinned Overpass timestamp. Until that exists, treat the database as a
-  local artifact and do not describe a fresh deployment as "working".
+- **The city is a frozen snapshot, and it will go stale.** It is reproducible and
+  auditable, but the OSM payload was fetched on 2026-09-27 and OSM is edited
+  constantly. `python -m scripts.build_city --refresh` updates it, and
+  `--verify` reports the drift without changing anything. Preflight warns once
+  the snapshot passes a year, and requires the provenance record to exist at all,
+  because a deployment with no data is otherwise invisible: it boots, passes
+  every check, and shows an empty map.
+  The bbox is pinned to `12.75,77.45,13.15,77.80`, which is the area the
+  original hand-built database came from. Widening it is a decision, not a
+  typo fix, and the count will move.
+- **The dish and review corpus is still empty.** The paths to fill it now exist
+  (see [Contributing a menu](#contributing-a-menu)) but nobody has used them, so
+  the craving radar has no dish text to rank. The mechanism is built; the data is
+  not there yet.
+- **Building for a real server database is not supported.** `build_city` replays
+  into a SQLite file and refuses a non-SQLite `TABIKO_DATABASE_URL` rather than
+  quietly writing to a file nothing reads. A PostgreSQL deployment needs the
+  importer pointed at the server; until then, single box only.
 - **It is not built for thousands of concurrent users.** One process plateaus at
   4–5 rps on the card path, bounded by the GIL rather than the database. Worker
   *processes* fix it — 4 workers take the map from 91 to 285 rps and the card

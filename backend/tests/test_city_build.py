@@ -405,3 +405,65 @@ def test_the_pinned_bbox_is_the_one_the_data_came_from():
     falls inside. Changing it would silently produce a different city."""
 
     assert build_city.CITY_BBOX == (12.75, 77.45, 13.15, 77.80)
+
+
+# ---------- where the city is built ----------
+
+
+def test_the_build_targets_the_configured_database(monkeypatch):
+    """The bug that produced a healthy container serving an empty map.
+
+    `build_city` hardcoded `backend/tabiko.db` while the app was configured with
+    `TABIKO_DATABASE_URL=sqlite:////data/tabiko.db`. The build reported "imported
+    7683 places" into one file and the service read an empty one from the other,
+    and nothing anywhere reported a problem.
+    """
+
+    monkeypatch.setenv("TABIKO_DATABASE_URL", "sqlite:////data/tabiko.db")
+
+    assert build_city.default_database() == Path("/data/tabiko.db")
+
+
+def test_an_unset_url_falls_back_to_the_local_file(monkeypatch):
+    monkeypatch.delenv("TABIKO_DATABASE_URL", raising=False)
+
+    assert build_city.default_database() == build_city.BACKEND / "tabiko.db"
+
+
+def test_a_relative_sqlite_url_resolves_against_the_backend(monkeypatch):
+    monkeypatch.setenv("TABIKO_DATABASE_URL", "sqlite:///other.db")
+
+    assert build_city.default_database() == build_city.BACKEND / "other.db"
+
+
+def test_a_windows_absolute_sqlite_url_is_understood(monkeypatch):
+    """Four slashes then a drive letter is a real path on this platform."""
+
+    monkeypatch.setenv("TABIKO_DATABASE_URL", "sqlite:///C:/data/tabiko.db")
+
+    assert build_city.default_database() == Path("C:/data/tabiko.db")
+
+
+def test_a_database_server_url_is_refused_rather_than_ignored(monkeypatch):
+    """A PostgreSQL deployment must not build the city into a file it will never
+    read, and then serve an empty database while reporting success."""
+
+    monkeypatch.setenv(
+        "TABIKO_DATABASE_URL", "postgresql+psycopg://tabiko@localhost/tabiko"
+    )
+
+    with pytest.raises(SystemExit, match="not SQLite"):
+        build_city.default_database()
+
+
+def test_counting_places_in_a_database_without_a_schema(tmp_path):
+    """A file that exists but has no tables is an empty city, not a crash."""
+
+    empty = tmp_path / "schema-less.db"
+    empty.touch()
+
+    assert build_city.count_places(empty) == 0
+
+
+def test_counting_places_in_a_database_that_does_not_exist(tmp_path):
+    assert build_city.count_places(tmp_path / "never.db") == 0

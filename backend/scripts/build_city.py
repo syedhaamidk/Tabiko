@@ -55,7 +55,50 @@ CITY_BBOX: tuple[float, float, float, float] = (12.75, 77.45, 13.15, 77.80)
 
 SNAPSHOT_PATH = BACKEND / "data" / "osm_snapshot.json.gz"
 PROVENANCE_PATH = BACKEND / "data" / "city_provenance.json"
-DEFAULT_DATABASE = BACKEND / "tabiko.db"
+
+
+def default_database() -> Path:
+    """Where the city should be built, honouring `TABIKO_DATABASE_URL`.
+
+    This has to agree with what the app will actually read, and getting it wrong
+    is invisible in the worst way: the build reports "imported 7683 places" into
+    one file while the service serves an empty one from another, and the
+    container is healthy throughout. It was found by deploying with the database
+    on a mounted volume, where `build_city` had quietly written the city to
+    `/app/tabiko.db` while `TABIKO_DATABASE_URL` pointed at `/data/tabiko.db`.
+
+    A non-SQLite URL cannot be built by replaying into a file, so it is reported
+    rather than silently ignored: a PostgreSQL deployment needs the importer to
+    write to the server, and pretending otherwise would produce another empty
+    deployment that looks fine.
+    """
+
+    url = (os.getenv("TABIKO_DATABASE_URL") or "").strip()
+    if not url:
+        return BACKEND / "tabiko.db"
+
+    if not url.startswith("sqlite"):
+        raise SystemExit(
+            f"TABIKO_DATABASE_URL is {url!r}, which is not SQLite.\n"
+            "build_city replays a snapshot into a local file and cannot target a "
+            "database server. Build the city against SQLite, or add a server path "
+            "to this script -- do not deploy with an empty database."
+        )
+
+    # SQLAlchemy's convention: everything up to `sqlite://` goes, then
+    #   sqlite:///other.db          -> "other.db", relative to the backend
+    #   sqlite:////data/tabiko.db   -> "/data/tabiko.db", absolute
+    #   sqlite:///C:/data/tabiko.db -> "C:/data/tabiko.db", absolute on Windows
+    remainder = url[len("sqlite://") :]
+    if remainder.startswith("//"):
+        return Path(remainder[1:])
+    body = remainder.lstrip("/")
+    if len(body) > 1 and body[1] == ":":
+        return Path(body)
+    return BACKEND / body
+
+
+DEFAULT_DATABASE = None  # resolved at call time; see default_database()
 
 # How old the snapshot may get before preflight complains. A year is long
 # enough that nobody has to babysit it and short enough that "the data is from
@@ -291,7 +334,7 @@ def main() -> int:
     parser.add_argument(
         "--database",
         type=Path,
-        default=DEFAULT_DATABASE,
+        default=None,
         help="The live database to build into or compare against.",
     )
     parser.add_argument(
@@ -313,6 +356,12 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    if args.database is None:
+        # Resolved here rather than as an argparse default, so that setting
+        # TABIKO_DATABASE_URL after argument parsing still takes effect and an
+        # unsupported URL fails before anything is written.
+        args.database = default_database()
 
     if args.tiles < 1:
         parser.error("--tiles must be at least 1")

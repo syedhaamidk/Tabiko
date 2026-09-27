@@ -1,0 +1,50 @@
+# A one-command deployment that survives a container being replaced.
+#
+# The single most important line here is TABIKO_DATABASE_URL. Without it the
+# database lives at /app/tabiko.db, inside the container's own filesystem, so
+# `docker rm` throws the city away and the next boot has to rebuild it. That
+# works -- the snapshot is in the image -- but it costs a rebuild and loses
+# every dish, review and account a reader created. Pointing it at the mounted
+# volume is what makes the volume mean anything.
+
+services:
+  tabiko:
+    build: .
+    image: tabiko:local
+    ports:
+      - "8010:8010"
+    environment:
+      # Anything else, or unset, is production, and the service refuses to
+      # start without a real secret of at least 32 characters.
+      TABIKO_ENV: production
+
+      # Generate with:  python -c "import secrets; print(secrets.token_urlsafe(48))"
+      # Do not commit a real one. The service refuses to start on the published
+      # development value, which is the point of it.
+      TABIKO_JWT_SECRET: ${TABIKO_JWT_SECRET:?set TABIKO_JWT_SECRET in .env}
+
+      # SQLite serialises writes on one file, so one container only. To run
+      # several, switch to PostgreSQL: pip install -r
+      # backend/requirements-postgres.txt, then point this at it.
+      TABIKO_DATABASE_URL: sqlite:////data/tabiko.db
+
+      # One worker per core is the default. Lower it on a small box; each worker
+      # holds about 120 MB of index.
+      TABIKO_WORKERS: ${TABIKO_WORKERS:-4}
+    volumes:
+      # The city, and everything readers create.
+      - tabiko-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8010/health/live', timeout=4).status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  tabiko-data:
