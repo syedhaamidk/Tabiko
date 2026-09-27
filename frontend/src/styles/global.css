@@ -619,7 +619,7 @@ textarea:focus-visible {
 }
 
 .filter-shell__heading strong {
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 400;
 }
@@ -1574,7 +1574,7 @@ textarea:focus-visible {
 
 .food-popup__card strong {
   overflow: hidden;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 400;
   text-overflow: ellipsis;
@@ -1922,7 +1922,7 @@ textarea:focus-visible {
 
 .dish-card h3 {
   margin: 0.35rem 0 0.15rem;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.82rem;
   font-weight: 400;
 }
@@ -2160,7 +2160,7 @@ textarea:focus-visible {
 }
 
 .review-composer__rating label {
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.75rem;
 }
 
@@ -2223,7 +2223,7 @@ textarea:focus-visible {
   border-radius: 50%;
   color: #fff;
   background: linear-gradient(135deg, var(--detail-color), var(--detail-accent));
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.75rem;
 }
 
@@ -2235,7 +2235,7 @@ textarea:focus-visible {
 .review-card__rating {
   margin-left: auto;
   color: #b4560a;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.9rem;
 }
 
@@ -2498,7 +2498,7 @@ body {
 .brand__wordmark {
   display: grid;
   color: #fff;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: clamp(1.1rem, 2.4vw, 1.65rem);
   letter-spacing: 0.02em;
   line-height: 0.9;
@@ -2507,7 +2507,7 @@ body {
 
 .brand__wordmark em {
   color: var(--festival-lime);
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.45em;
   font-style: normal;
   font-weight: 600;
@@ -2590,7 +2590,7 @@ body {
   color: var(--festival-ink);
   background: #fff;
   box-shadow: 6px 6px 0 var(--festival-ink);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   text-align: center;
 }
 
@@ -2602,7 +2602,7 @@ body {
 .festival-sticker small {
   display: block;
   margin-top: 0.18rem;
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.5rem;
   letter-spacing: 0.1em;
 }
@@ -2684,7 +2684,7 @@ body {
   align-items: center;
   gap: 0.55rem;
   padding: 0.6rem 1.1rem;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.78rem;
   white-space: nowrap;
 }
@@ -2792,7 +2792,7 @@ body {
   color: #fff;
   background: var(--festival-pink);
   box-shadow: 5px 5px 0 var(--festival-ink);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.66rem;
   line-height: 1.2;
   text-align: center;
@@ -2899,7 +2899,7 @@ body {
   top: 0.75rem;
   right: 0.85rem;
   color: var(--festival-ink);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.62rem;
   opacity: 0.45;
 }
@@ -3008,7 +3008,7 @@ body {
   border-radius: 50%;
   color: var(--festival-ink);
   background: var(--festival-lime);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.42rem;
   line-height: 1.15;
   text-align: center;
@@ -3149,7 +3149,7 @@ body {
   color: var(--festival-ink);
   background: var(--festival-lime);
   box-shadow: 5px 5px 0 var(--festival-ink);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.62rem;
   line-height: 1.15;
   text-align: center;
@@ -3167,7 +3167,7 @@ body {
   border-top: 2px solid var(--festival-ink);
   color: var(--festival-ink);
   background: var(--festival-lime);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.55rem;
   letter-spacing: 0.08em;
   text-align: center;
@@ -3414,12 +3414,12 @@ body {
   padding: 0.55rem 0.7rem;
   border-bottom: 2px solid var(--festival-ink);
   background: var(--festival-yellow);
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.6rem;
 }
 
 .select-menu__listhead small {
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.55rem;
   font-weight: 700;
   letter-spacing: 0;
@@ -3464,7 +3464,7 @@ body {
   outline: 0;
   color: var(--festival-ink);
   background: transparent;
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.74rem;
   font-weight: 600;
 }
@@ -3773,7 +3773,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.66rem;
 }
 
@@ -3821,7 +3821,7 @@ body {
 }
 
 .directions-card__totals strong {
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.95rem;
 }
 
@@ -3862,7 +3862,7 @@ body {
 }
 
 .directions-card__step-distance {
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.6rem;
   opacity: 0.65;
 }
@@ -4053,7 +4053,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -4083,7 +4083,7 @@ body {
 }
 
 .cluster-marker b {
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.7rem;
   line-height: 1;
   transform: rotate(45deg);
@@ -4111,7 +4111,7 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -4135,7 +4135,7 @@ body {
 .map-landmark-label span {
   padding: 0.1rem 0.3rem;
   border-radius: 5px 8px 5px 8px;
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   font-size: 0.58rem;
   font-weight: 700;
   white-space: nowrap;
@@ -4177,7 +4177,7 @@ body {
   border-color: var(--festival-ink) !important;
   color: var(--festival-ink);
   background: #fffdf8;
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   line-height: 32px !important;
 }
 
@@ -4224,12 +4224,12 @@ body {
   width: 92px;
   height: 92px;
   border-radius: 14px 22px 14px 22px;
-  font-family: "Fredoka", sans-serif;
+  font-family: var(--font-body);
   transform: rotate(-3deg);
 }
 
 .map-stamp strong {
-  font-family: "Bungee", cursive;
+  font-family: var(--font-display);
   font-size: 0.58rem;
 }
 
