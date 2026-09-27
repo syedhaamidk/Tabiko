@@ -146,6 +146,19 @@ DISH_BULK_RATE_LIMIT = int(os.getenv("TABIKO_DISH_BULK_RATE_LIMIT", "20"))
 # transcribing a board.
 MAX_DISHES_PER_REQUEST = int(os.getenv("TABIKO_MAX_DISHES_PER_REQUEST", "80"))
 
+# Following people. Both caps exist so the endpoints cannot be turned into a
+# directory of every reader in the database.
+#
+# The search cap is generous for the current scale -- a city of 7,683 places has
+# almost no readers yet -- and deliberately not a ranking. Suggesting people
+# would be the first step toward the algorithmic timeline this feature exists to
+# avoid; a reader types a name, or does not find them.
+USER_SEARCH_LIMIT = int(os.getenv("TABIKO_USER_SEARCH_LIMIT", "25"))
+# ~50 as specified. A chronological feed that paginates would be fine, but a
+# page of nothing is not useful, and the alternative is the "load more" machinery
+# for a feed nobody has 200 entries in.
+FEED_LIMIT = int(os.getenv("TABIKO_FEED_LIMIT", "50"))
+
 
 def _require_api_key(api_key: ApiKeyHeader = None) -> None:
     if API_KEY is None:
@@ -226,6 +239,239 @@ def _serialize_review(db: Session, review: models.Review) -> schemas.ReviewOut:
             ),
         ),
     )
+
+
+# ---------- Following people ----------
+
+
+def _follower_count(db: Session, user_id: int) -> int:
+    return db.query(models.Follow).filter_by(followed_id=user_id).count()
+
+
+def _following_count(db: Session, user_id: int) -> int:
+    return db.query(models.Follow).filter_by(follower_id=user_id).count()
+
+
+def _public_user(
+    db: Session, user: models.User, viewer_id: int | None
+) -> schemas.PublicUser:
+    return schemas.PublicUser(
+        id=user.id,
+        name=user.name,
+        reviewer_type=user.reviewer_type,
+        is_critic_verified=user.is_critic_verified,
+        cuisine_specialty=user.cuisine_specialty,
+        follower_count=_follower_count(db, user.id),
+        following_count=_following_count(db, user.id),
+        is_following=(
+            db.query(models.Follow)
+            .filter_by(follower_id=viewer_id, followed_id=user.id)
+            .first()
+            is not None
+            if viewer_id is not None
+            else False
+        ),
+    )
+
+
+@app.get("/users/search", response_model=list[schemas.PublicUser])
+def search_users(
+    q: Annotated[str, Query(min_length=1, max_length=60)],
+    db: DbSession,
+    current_user: CurrentUser,
+) -> list[schemas.PublicUser]:
+    """Find readers by name, for the follow button to attach to.
+
+    Capped and excludes self. A city of 7,683 places has almost no readers
+    today, so this returns what exists and no more -- it is deliberately not a
+    "suggested people" algorithm, because a ranking of people would be the
+    beginning of the timeline this feature exists to avoid.
+    """
+
+    term = q.strip()
+    if not term:
+        return []
+    rows = (
+        db.query(models.User)
+        .filter(
+            models.User.id != current_user.id,
+            models.User.name.ilike(f"%{term}%"),
+        )
+        .order_by(models.User.name)
+        .limit(USER_SEARCH_LIMIT)
+        .all()
+    )
+    return [_public_user(db, user, current_user.id) for user in rows]
+
+
+@app.post("/users/{user_id}/follow", response_model=schemas.FollowStatus)
+def follow_user(
+    user_id: int, db: DbSession, current_user: CurrentUser
+) -> schemas.FollowStatus:
+    """Follow someone. Idempotent, and never yourself."""
+
+    if user_id == current_user.id:
+        raise HTTPException(
+            status_code=422,
+            detail="You cannot follow yourself, however much you want to.",
+        )
+    target = db.get(models.User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="No such reader")
+
+    # The unique pair makes this idempotent, so a retried request that the first
+    # one already accepted does not need a read-before-write or a lock.
+    existing = (
+        db.query(models.Follow)
+        .filter_by(follower_id=current_user.id, followed_id=user_id)
+        .first()
+    )
+    if existing is None:
+        db.add(models.Follow(follower_id=current_user.id, followed_id=user_id))
+        try:
+            db.commit()
+        except IntegrityError:
+            # Lost a race with a concurrent tap. The state the caller wanted is
+            # the state it is in, so this is a success.
+            db.rollback()
+
+    return schemas.FollowStatus(
+        is_following=True,
+        follower_count=_follower_count(db, user_id),
+        following_count=_following_count(db, current_user.id),
+    )
+
+
+@app.delete("/users/{user_id}/follow", response_model=schemas.FollowStatus)
+def unfollow_user(
+    user_id: int, db: DbSession, current_user: CurrentUser
+) -> schemas.FollowStatus:
+    """Stop following. Idempotent, including for someone never followed."""
+
+    if user_id == current_user.id:
+        raise HTTPException(status_code=422, detail="You cannot unfollow yourself.")
+
+    # Idempotent including for someone never followed, so a DELETE on a
+    # relationship that is not there is a success rather than a 404. The button
+    # can then be clicked twice, or a retried request can land, without the UI
+    # having to reconcile an error.
+    (
+        db.query(models.Follow)
+        .filter_by(follower_id=current_user.id, followed_id=user_id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+
+    return schemas.FollowStatus(
+        is_following=False,
+        follower_count=_follower_count(db, user_id),
+        following_count=_following_count(db, current_user.id),
+    )
+
+
+@app.get("/users/{user_id}/follow-status", response_model=schemas.FollowStatus)
+def follow_status(
+    user_id: int, db: DbSession, current_user: CurrentUser
+) -> schemas.FollowStatus:
+    target = db.get(models.User, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="No such reader")
+    return schemas.FollowStatus(
+        is_following=(
+            db.query(models.Follow)
+            .filter_by(follower_id=current_user.id, followed_id=user_id)
+            .first()
+            is not None
+        ),
+        follower_count=_follower_count(db, user_id),
+        following_count=_following_count(db, user_id),
+    )
+
+
+@app.get("/users/me/following", response_model=schemas.FollowingOut)
+def my_following(db: DbSession, current_user: CurrentUser) -> schemas.FollowingOut:
+    """Everyone this reader follows, newest follow first."""
+
+    followed = (
+        db.query(models.User)
+        .join(models.Follow, models.Follow.followed_id == models.User.id)
+        .filter(models.Follow.follower_id == current_user.id)
+        .order_by(models.Follow.created_at.desc(), models.User.id)
+        .all()
+    )
+    return schemas.FollowingOut(
+        users=[_public_user(db, user, current_user.id) for user in followed],
+        count=len(followed),
+    )
+
+
+def _followed_ids(db: Session, user_id: int) -> set[int]:
+    return {
+        row[0]
+        for row in db.query(models.Follow.followed_id)
+        .filter(models.Follow.follower_id == user_id)
+        .all()
+    }
+
+
+@app.get("/feed/following", response_model=schemas.FeedOut)
+def following_feed(db: DbSession, current_user: CurrentUser) -> schemas.FeedOut:
+    """Reviews by people this reader follows, newest first.
+
+    Strictly chronological. There is no ranking, no weighting, no "because you
+    follow people who follow people who..." -- the point of the feature is that
+    it is predictable, and a feed you cannot explain is a feed you cannot trust.
+    """
+
+    followed = _followed_ids(db, current_user.id)
+    if not followed:
+        return schemas.FeedOut(entries=[], count=0)
+
+    reviews = (
+        db.query(models.Review)
+        .filter(
+            models.Review.user_id.in_(followed),
+            models.Review.fraud_flag.is_(False),
+        )
+        .order_by(models.Review.created_at.desc(), models.Review.id.desc())
+        .limit(FEED_LIMIT)
+        .all()
+    )
+
+    places = {
+        place.id: place
+        for place in db.query(models.Restaurant)
+        .filter(models.Restaurant.id.in_({review.restaurant_id for review in reviews}))
+        .all()
+    }
+
+    entries = [
+        schemas.FeedEntry(
+            review=_serialize_review(db, review),
+            restaurant_name=(
+                places[review.restaurant_id].name
+                if review.restaurant_id in places
+                else "A place that has since been removed"
+            ),
+            restaurant_cuisine=(
+                places[review.restaurant_id].cuisine_tags
+                if review.restaurant_id in places
+                else None
+            ),
+            restaurant_latitude=(
+                places[review.restaurant_id].latitude
+                if review.restaurant_id in places
+                else None
+            ),
+            restaurant_longitude=(
+                places[review.restaurant_id].longitude
+                if review.restaurant_id in places
+                else None
+            ),
+        )
+        for review in reviews
+    ]
+    return schemas.FeedOut(entries=entries, count=len(entries))
 
 
 # ---------- Saved places ----------
@@ -1569,12 +1815,43 @@ def list_reviews_for_restaurant(
     db: DbSession,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    following_only: bool = Query(default=False),
+    current_user: Annotated[
+        models.User | None, Depends(auth.get_current_user_optional)
+    ] = None,
 ) -> list[schemas.ReviewOut]:
+    """Every review of a place, or only those from people the reader follows.
+
+    `following_only` is a filter on an otherwise public list, not a private one.
+    When it is off or absent the endpoint behaves exactly as it did before this
+    parameter existed, which is what keeps a signed-out reader working and keeps
+    this from turning the public reviews list into something auth-gated.
+
+    When it is on and nobody is signed in, it is a 401 rather than an empty
+    list. "You are following nobody" and "you are not logged in" are different
+    answers, and returning an empty list for both would leave a reader staring
+    at a blank panel with no explanation and no way to tell what went wrong.
+    """
+
     _restaurant_or_404(db, restaurant_id)
+
+    query = db.query(models.Review).filter_by(
+        restaurant_id=restaurant_id, fraud_flag=False
+    )
+    if following_only:
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sign in to see reviews from people you follow.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        followed = _followed_ids(db, current_user.id)
+        if not followed:
+            return []
+        query = query.filter(models.Review.user_id.in_(followed))
+
     reviews = (
-        db.query(models.Review)
-        .filter_by(restaurant_id=restaurant_id, fraud_flag=False)
-        .order_by(models.Review.created_at.desc(), models.Review.id.desc())
+        query.order_by(models.Review.created_at.desc(), models.Review.id.desc())
         .offset(offset)
         .limit(limit)
         .all()

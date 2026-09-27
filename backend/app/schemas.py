@@ -384,6 +384,50 @@ class ReviewOut(BaseModel):
     reviewer: ReviewerInfo
 
 
+class PublicUser(BaseModel):
+    """Another reader, as far as anyone else needs to know about them.
+
+    Deliberately thin: a display name, what they call themselves, and the two
+    counts the follow button needs. No email, no location, nothing that would
+    make a public directory of readers.
+    """
+
+    id: int
+    name: str
+    reviewer_type: ReviewerType
+    is_critic_verified: bool
+    cuisine_specialty: str | None = None
+    follower_count: int = 0
+    following_count: int = 0
+    is_following: bool = False
+
+
+class FollowStatus(BaseModel):
+    is_following: bool
+    follower_count: int
+    following_count: int
+
+
+class FollowingOut(BaseModel):
+    users: list[PublicUser]
+    count: int
+
+
+class FeedEntry(BaseModel):
+    """One review in the following feed, with enough of its place to render it."""
+
+    review: ReviewOut
+    restaurant_name: str
+    restaurant_cuisine: str | None = None
+    restaurant_latitude: float | None = None
+    restaurant_longitude: float | None = None
+
+
+class FeedOut(BaseModel):
+    entries: list[FeedEntry]
+    count: int
+
+
 class FavoriteOut(BaseModel):
     """A saved place.
 

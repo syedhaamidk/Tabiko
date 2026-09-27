@@ -192,6 +192,20 @@ class User(Base):
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
     dishes = relationship("Dish", back_populates="added_by")
+    # Two relationships to the same table, so they need telling apart explicitly.
+    # `following` is who this reader follows, `followers` who follows them.
+    following = relationship(
+        "Follow",
+        foreign_keys="Follow.follower_id",
+        back_populates="follower",
+        cascade="all, delete-orphan",
+    )
+    followers = relationship(
+        "Follow",
+        foreign_keys="Follow.followed_id",
+        back_populates="followed",
+        cascade="all, delete-orphan",
+    )
 
 
 class Review(Base):
@@ -293,6 +307,41 @@ class Favorite(Base):
 
     user = relationship("User", back_populates="favorites")
     restaurant = relationship("Restaurant", back_populates="favorites")
+
+
+class Follow(Base):
+    """One reader following another. Immediate, no approval, no requests.
+
+    The unique pair is the whole feature: it makes following idempotent, so the
+    endpoint needs no read-before-write and a retried request cannot double up.
+    The check constraint is the only place a self-follow cannot be written from.
+    """
+
+    __tablename__ = "follows"
+    __table_args__ = (
+        UniqueConstraint("follower_id", "followed_id", name="uq_follow_pair"),
+        CheckConstraint("follower_id != followed_id", name="ck_follow_not_self"),
+        # "Who do I follow" and "who follows me" are the only two questions
+        # asked, and both are asked on every page that renders a reviewer.
+        Index("ix_follows_follower_created", "follower_id", "created_at"),
+        Index("ix_follows_followed", "followed_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    follower_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    followed_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    follower = relationship(
+        "User", foreign_keys=[follower_id], back_populates="following"
+    )
+    followed = relationship(
+        "User", foreign_keys=[followed_id], back_populates="followers"
+    )
 
 
 class RateLimit(Base):

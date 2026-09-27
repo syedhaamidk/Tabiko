@@ -330,6 +330,28 @@ def get_current_user(
     return user
 
 
+def get_current_user_optional(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> models.User | None:
+    """The same as `get_current_user`, except anonymous is allowed.
+
+    For endpoints that are public but gain something when signed in, where
+    requiring a token would break the page for readers who are only browsing.
+
+    A token that is *present but bad* is still a 401 rather than a silent
+    downgrade to anonymous. A client sending a token has said it believes it is
+    signed in, and quietly treating that as "logged out" turns an expired
+    session into a page that looks signed out instead of an error the client can
+    act on by refreshing. The frontend relies on that distinction to know when to
+    refresh a token.
+    """
+
+    if credentials is None:
+        return None
+    return get_current_user(credentials, db)
+
+
 def require_admin(
     current_user: Annotated[models.User, Depends(get_current_user)],
 ) -> models.User:
