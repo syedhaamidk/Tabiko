@@ -6,7 +6,7 @@
 
 **A Bengaluru food radar — 7,683 real places, zero tile servers, zero pay-to-play.**
 
-[![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![CI](https://github.com/syedhaamidk/Tabiko/actions/workflows/ci.yml/badge.svg)](https://github.com/syedhaamidk/Tabiko/actions/workflows/ci.yml)
 [![Backend](https://img.shields.io/badge/backend-FastAPI_0.136-009688?style=flat-square&logo=fastapi)](backend/)
 [![Frontend](https://img.shields.io/badge/frontend-React_18_+_Vite-61DAFB?style=flat-square&logo=react)](frontend/)
 [![Database](https://img.shields.io/badge/database-SQLite_WAL-003B57?style=flat-square&logo=sqlite)](backend/app/database.py)
@@ -229,8 +229,8 @@ tabiko/
 ## 🤝 Contributing
 
 ```bash
-git clone https://github.com/<your-user>/tabiko.git
-cd tabiko
+git clone https://github.com/syedhaamidk/Tabiko.git
+cd Tabiko
 docker compose up -d --build   # full deployment, city builds itself on first boot
 ```
 
