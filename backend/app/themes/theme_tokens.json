@@ -1,0 +1,58 @@
+{
+  "south_indian": {
+    "palette": { "primary": "#B23A1E", "secondary": "#F2C14E", "background": "#FFF8ED", "text": "#2B1A14" },
+    "font_pair": { "display": "'Rozha One', serif", "body": "'Poppins', sans-serif" },
+    "texture": "banana-leaf-weave",
+    "icon_style": "hand-drawn",
+    "motion": "gentle-steam-rise"
+  },
+  "north_indian": {
+    "palette": { "primary": "#8C1D18", "secondary": "#D4AF37", "background": "#FFF3E0", "text": "#2A1412" },
+    "font_pair": { "display": "'Playfair Display', serif", "body": "'Nunito Sans', sans-serif" },
+    "texture": "damask-subtle",
+    "icon_style": "ornate",
+    "motion": "warm-glow-pulse"
+  },
+  "chinese": {
+    "palette": { "primary": "#C0392B", "secondary": "#F1C40F", "background": "#FDF6EC", "text": "#2B1A17" },
+    "font_pair": { "display": "'Noto Serif SC', serif", "body": "'Inter', sans-serif" },
+    "texture": "paper-lantern",
+    "icon_style": "brush-stroke",
+    "motion": "lantern-sway"
+  },
+  "cafe_bakery": {
+    "palette": { "primary": "#A9746E", "secondary": "#E8C4A2", "background": "#FDF6F0", "text": "#33221F" },
+    "font_pair": { "display": "'Caveat', cursive", "body": "'Quicksand', sans-serif" },
+    "texture": "kraft-paper",
+    "icon_style": "soft-rounded",
+    "motion": "coffee-steam-drift"
+  },
+  "street_food": {
+    "palette": { "primary": "#FF5733", "secondary": "#1E1E1E", "background": "#FFF9E6", "text": "#1A1A1A" },
+    "font_pair": { "display": "'Bungee', cursive", "body": "'Work Sans', sans-serif" },
+    "texture": "grease-stain-grunge",
+    "icon_style": "sticker-graffiti",
+    "motion": "bounce-pop"
+  },
+  "continental_italian": {
+    "palette": { "primary": "#2E4053", "secondary": "#C0A062", "background": "#F7F5F2", "text": "#1F2933" },
+    "font_pair": { "display": "'Cormorant Garamond', serif", "body": "'Lato', sans-serif" },
+    "texture": "linen-weave",
+    "icon_style": "minimal-line",
+    "motion": "slow-fade"
+  },
+  "fine_dine": {
+    "palette": { "primary": "#D4AF37", "secondary": "#0D0D0D", "background": "#0D0D0D", "text": "#F7F5F2" },
+    "font_pair": { "display": "'Bodoni Moda', serif", "body": "'Karla', sans-serif" },
+    "texture": "none",
+    "icon_style": "thin-gold-line",
+    "motion": "subtle-shine-sweep"
+  },
+  "multi_cuisine_default": {
+    "palette": { "primary": "#FF2E88", "secondary": "#FFD23F", "background": "#FFF4D6", "text": "#2A0E1E" },
+    "font_pair": { "display": "'Bungee', cursive", "body": "'Fredoka', sans-serif" },
+    "texture": "none",
+    "icon_style": "flat",
+    "motion": "none"
+  }
+}

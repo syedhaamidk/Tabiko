@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+node_modules/
+dist/
+
+# The city itself is a local artifact, not source.
+#
+# `*.db` rather than the per-directory list this used to carry: running the app
+# from the repository root leaves a tabiko.db there, and the old patterns missed
+# it. A stray empty database got committed once already.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+.env
+frontend/.env.local
+*.pem
+*.key
+id_rsa*

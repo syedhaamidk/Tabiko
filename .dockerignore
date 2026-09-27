@@ -1,0 +1,52 @@
+# Keep the build context to what the image actually needs.
+#
+# Before this existed, `COPY backend/ ./` was dragging in backend/.venv (4,538
+# files, 101 MB) and __pycache__ on every build: a 173 MB context for an image
+# whose real content is a few megabytes.
+#
+# The `**/` prefixes are load-bearing. A bare `.venv` matches only `./.venv`; the
+# virtualenv here is at `backend/.venv`, so without `**/` it is silently copied
+# in and the image ships a 100 MB directory of Windows-built wheels that nothing
+# can import. A `.dockerignore` that looks right and matches nothing is worse
+# than none, because it reads as if the problem is handled.
+
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/*.egg-info/
+
+**/node_modules/
+frontend/dist/
+
+.git/
+.github/
+.vscode/
+.idea/
+**/*.log
+
+# Local scratch and verification artifacts.
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+
+# NOTE on the database.
+#
+# `backend/tabiko.db` is deliberately NOT excluded, so a local build produces a
+# container that actually contains the city.
+#
+# That is a temporary convenience and it has a real caveat: the file is
+# gitignored, so a CI-built or clone-built image has no database and serves
+# `{"places": 0}`. Nothing fails, health checks pass, and the app looks healthy
+# while being empty. CI cannot catch it, because CI checks out from git and so
+# has no data either.
+#
+# The fix is to make the city reproducible from source -- an importer that
+# rebuilds the database from a pinned bbox and date -- at which point this file
+# should exclude the database too, like every other build artifact. Until then,
+# keep this exclusion off, or your local container goes blank.

@@ -1,0 +1,30 @@
+export default function BrandMark({ size = 48, title = "Tabiko" }) {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      role="img"
+      aria-label={title}
+      style={{ display: "block", overflow: "visible" }}
+    >
+      <path
+        d="M11 4h38c7 0 11 5 11 12v33c0 7-4 11-11 11H14c-7 0-11-4-11-11V15C3 8 5 4 11 4Z"
+        fill="#FF2E88"
+        stroke="#2A0E1E"
+        strokeWidth="3"
+      />
+      <circle cx="32" cy="33" r="19" fill="#FFD23F" stroke="#2A0E1E" strokeWidth="3" />
+      <circle cx="32" cy="33" r="11" fill="#2D5BFF" stroke="#2A0E1E" strokeWidth="2.5" />
+      <path
+        d="M32 16c5 7 10 11 10 18 0 7-5 12-10 12s-10-5-10-12c0-7 5-11 10-18Z"
+        fill="#fff"
+        stroke="#2A0E1E"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <path d="M32 30c3 4 5 6 5 10 0 3-2 5-5 5s-5-2-5-5c0-4 2-6 5-10Z" fill="#FF6B35" />
+      <path d="M9 12l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5ZM53 40l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5 1.5-4Z" fill="#C6F135" stroke="#2A0E1E" strokeWidth="1.5" />
+    </svg>
+  );
+}

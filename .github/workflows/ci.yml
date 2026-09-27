@@ -1,0 +1,167 @@
+name: CI
+
+# The point of this file is that nothing reaches a machine without the checks
+# below having run. Until it existed, 215 tests only ran when someone remembered
+# to ask, and three separate regressions in this codebase would each have been
+# caught by a test that was not being executed.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+# A new push makes an in-flight run for the same ref irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          # requirements-dev carries ruff, pytest and alembic on top of the runtime.
+          pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: |
+          ruff check app tests scripts migrations
+          ruff format --check app tests scripts migrations
+
+      - name: Test
+        run: pytest -q
+
+      - name: Migrations match the models
+        # Guards a forgotten migration, which is the failure mode that only shows
+        # up in production.
+        run: alembic upgrade head && alembic check
+
+      - name: Security guard
+        # Importing the app without a signing secret must fail loudly. If this
+        # ever passes silently, the fallback has crept back in.
+        env:
+          TABIKO_ENV: production
+        run: |
+          if python -c "import app.auth" 2>/dev/null; then
+            echo "::error::app.auth imported without TABIKO_JWT_SECRET; the dev secret fallback has returned"
+            exit 1
+          fi
+          echo "refuses to start without a signing secret, as required"
+
+      - name: Refuses a short secret
+        env:
+          TABIKO_ENV: production
+          TABIKO_JWT_SECRET: too-short
+        run: |
+          if python -c "import app.auth" 2>/dev/null; then
+            echo "::error::a 9-character signing secret was accepted"
+            exit 1
+          fi
+          echo "rejects a short secret, as required"
+
+      - name: Preflight catches a bad deployment
+        # The preflight runs at container boot, so it has to be able to fail.
+        # These are the configurations it exists to reject.
+        env:
+          TABIKO_ENV: production
+        run: |
+          fail=0
+          if python -m scripts.preflight; then
+            echo "::error::preflight passed with no signing secret"
+            fail=1
+          fi
+          TABIKO_JWT_SECRET=dev-only-secret-change-me-before-production-0000000000000000 \
+            python -m scripts.preflight || { echo "::error::preflight accepted the dev secret"; fail=1; }
+          TABIKO_JWT_SECRET=${{ secrets.TABIKO_JWT_SECRET || 'a-long-enough-secret-for-this-check-only' }} \
+            python -m scripts.preflight || { echo "::error::preflight failed on a sane config"; fail=1; }
+          exit $fail
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        # Regenerates the PWA icons as part of the build, so a drifted icon is a
+        # failing build rather than a surprise.
+        run: npm run build
+
+      - name: Audit
+        run: npm audit --audit-level=high
+
+  docker:
+    name: Container image
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: tabiko:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: The image starts and answers
+        # A Dockerfile that builds is not the same as one that runs. This proves
+        # the entrypoint, the migration step and the worker processes together.
+        env:
+          TABIKO_ENV: production
+          TABIKO_JWT_SECRET: ci-only-secret-that-is-long-enough-to-pass-validation
+        run: |
+          docker run -d --name tabiko -p 8010:8010 tabiko:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8010/health/live >/dev/null 2>&1; then
+              echo "container is serving"
+              curl -fsS http://127.0.0.1:8010/stats
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the container never became healthy"
+          docker logs tabiko
+          exit 1
+
+      - name: Teardown
+        if: always()
+        run: docker rm -f tabiko || true
