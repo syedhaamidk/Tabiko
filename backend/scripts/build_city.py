@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -181,16 +183,21 @@ def diff_databases(fresh: Path, live: Path) -> dict:
 def rebuild(database: Path, elements: list[dict], *, replace: bool) -> int:
     """Import elements into `database` from scratch, returning the row count.
 
-    Builds its own engine and session rather than using `app.database`'s, so the
-    target is whatever was asked for. `upsert_restaurant` takes the session as an
-    argument and never reaches for a global, so nothing here has to be patched.
+    The schema comes from Alembic, never from `Base.metadata.create_all`.
+
+    That is not a style preference. `create_all` builds whatever the models
+    happen to say today, and then `alembic upgrade` tries to create those same
+    tables again and dies on "table restaurants already exists". It only ever
+    appeared to work locally because an existing database already carried
+    `alembic_version` at head, so Alembic had nothing to do. A genuinely fresh
+    database -- which is the only case that matters for a first deployment --
+    failed outright, and it was the container that surfaced it.
+
+    Migrations are the single authority on schema, so they are the only thing
+    allowed to create tables here. They run in a subprocess against
+    `TABIKO_DATABASE_URL` because `app.database` binds its engine at import time,
+    and by this point it is already imported.
     """
-
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    from app.database import Base
-    from app.ingestion.overpass_ingest import upsert_restaurant
 
     if replace:
         for path in (
@@ -201,9 +208,16 @@ def rebuild(database: Path, elements: list[dict], *, replace: bool) -> int:
         log(f"  removed any existing {database.name}")
 
     database.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{database.as_posix()}", future=True)
+    url = f"sqlite:///{database.as_posix()}"
+    migrate(url)
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.ingestion.overpass_ingest import upsert_restaurant
+
+    engine = create_engine(url, future=True)
     try:
-        Base.metadata.create_all(bind=engine)
         session = sessionmaker(bind=engine, future=True)()
         try:
             count = 0
@@ -222,6 +236,42 @@ def rebuild(database: Path, elements: list[dict], *, replace: bool) -> int:
         engine.dispose()
 
     return count
+
+
+def migrate(url: str) -> None:
+    """Bring `url` to the migration head, in a subprocess, or fail loudly."""
+
+    environment = {**os.environ, "TABIKO_DATABASE_URL": url}
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=BACKEND,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "alembic upgrade head failed:\n"
+            f"{result.stdout.strip()}\n{result.stderr.strip()}"
+        )
+
+
+def count_places(database: Path) -> int:
+    """How many places are already in `database`, or 0 if it has no schema yet."""
+
+    if not database.is_file():
+        return 0
+    try:
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        try:
+            return connection.execute("select count(*) from restaurants").fetchone()[0]
+        finally:
+            connection.close()
+    except sqlite3.Error:
+        # No such table: the file exists but the schema does not. That is an
+        # empty city as far as this decision is concerned.
+        return 0
 
 
 def main() -> int:
@@ -251,6 +301,16 @@ def main() -> int:
         help="Grid size for --refresh. 16 means 4x4 small queries, which is far more reliable than one city-wide query.",
     )
     parser.add_argument("--url", help="Use only this Overpass endpoint.")
+    parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help=(
+            "Build only when the database has no places, and do nothing "
+            "otherwise. This is what the container runs: a first boot builds the "
+            "city from the committed snapshot, and a restart against a mounted "
+            "volume leaves the existing one alone."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -258,6 +318,23 @@ def main() -> int:
         parser.error("--tiles must be at least 1")
     side = int(args.tiles**0.5 + 0.5)
     rows = columns = max(1, side)
+
+    if args.if_empty:
+        if args.refresh:
+            parser.error("--if-empty and --refresh are different jobs")
+        existing = count_places(args.database)
+        if existing:
+            log(
+                f"{args.database.name} already holds {existing} places. Leaving it alone."
+            )
+            return 0
+        if not SNAPSHOT_PATH.is_file():
+            log(f"No snapshot at {SNAPSHOT_PATH}, and the database is empty.")
+            log("This deployment would serve an empty map.")
+            return 1
+        log(
+            f"{args.database.name} is empty and a snapshot is committed. Building the city."
+        )
 
     log(f"City bbox: {CITY_BBOX}")
 

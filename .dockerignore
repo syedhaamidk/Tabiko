@@ -29,24 +29,27 @@ frontend/dist/
 **/*.log
 
 # Local scratch and verification artifacts.
-*.db-shm
-*.db-wal
 .env
 .env.*
 !.env.example
 
 # NOTE on the database.
 #
-# `backend/tabiko.db` is deliberately NOT excluded, so a local build produces a
-# container that actually contains the city.
+# Excluded on purpose. The image ships the raw OSM snapshot in `backend/data/`
+# and the entrypoint builds the city from it on first boot, so a database is a
+# build output rather than an input.
 #
-# That is a temporary convenience and it has a real caveat: the file is
-# gitignored, so a CI-built or clone-built image has no database and serves
-# `{"places": 0}`. Nothing fails, health checks pass, and the app looks healthy
-# while being empty. CI cannot catch it, because CI checks out from git and so
-# has no data either.
+# This was previously NOT excluded, which was a bug with two faces. It shipped a
+# local database into every image, and that database had been created by
+# `Base.metadata.create_all` rather than by migrations -- so the entrypoint's
+# `alembic upgrade head` hit "table restaurants already exists" and the container
+# died on boot. It appeared to work only because a pre-existing database already
+# carried `alembic_version` at head.
 #
-# The fix is to make the city reproducible from source -- an importer that
-# rebuilds the database from a pinned bbox and date -- at which point this file
-# should exclude the database too, like every other build artifact. Until then,
-# keep this exclusion off, or your local container goes blank.
+# `backend/data/` is deliberately kept: 348 KB of gzipped OSM payload plus a few
+# hundred bytes of provenance, and it is the source the city is built from.
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3

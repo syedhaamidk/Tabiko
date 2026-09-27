@@ -28,9 +28,21 @@ fi
 
 echo "tabiko: checking the deployment configuration"
 # Refuses to start on a missing or published signing secret, a wildcard CORS
-# origin, or a static directory that is not there. Cheap, and it turns a silent
-# misconfiguration into a loud one at boot rather than a blank page later.
+# origin, a static directory that is not there, or a city with no data. Cheap, and
+# it turns a silent misconfiguration into a loud one at boot rather than a blank
+# page later.
 python -m scripts.preflight
+
+# The image ships the raw OSM snapshot, not a database. A pre-built database
+# would have to have its schema created outside migrations, and then Alembic
+# would collide with it on the way past ("table restaurants already exists").
+# Building here keeps migrations the only authority on schema.
+#
+# A first boot builds the city from the snapshot. A restart against a mounted
+# volume finds the database already populated and does nothing, so this is cheap
+# to leave in and impossible to forget.
+echo "tabiko: building the city if needed"
+python -m scripts.build_city --if-empty
 
 echo "tabiko: applying migrations"
 python -m alembic upgrade head
