@@ -18,11 +18,14 @@ These tests exist so that class of mistake is caught here rather than by a
 container refusing to boot.
 """
 
+import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
+from app.ingestion import snapshot as snap
 from scripts import preflight
 
 ICON_NAMES = ("icon-192.png", "icon-512.png")
@@ -245,6 +248,123 @@ def test_an_unset_static_dir_is_only_a_warning():
     assert result.warning
 
 
+# ---------- the city data check ----------
+
+
+@pytest.fixture
+def data_dir(tmp_path, monkeypatch):
+    """A backend directory with a plausible snapshot and provenance record."""
+
+    directory = tmp_path / "backend"
+    (directory / "data").mkdir(parents=True)
+    monkeypatch.setattr(preflight, "BACKEND", directory)
+    return directory / "data"
+
+
+def write_provenance(data_dir, **overrides):
+    record = {
+        "schema": 1,
+        "city": "Bengaluru",
+        "bbox": [12.75, 77.45, 13.15, 77.8],
+        "snapshot_digest": "sha256:" + "a" * 64,
+        "snapshot_fetched_at": "2026-09-27T00:00:00+00:00",
+        "places_imported": 7683,
+    }
+    record.update(overrides)
+    (data_dir / "city_provenance.json").write_text(json.dumps(record))
+    return record
+
+
+def write_snapshot(data_dir):
+    path = data_dir / "osm_snapshot.json.gz"
+    envelope = snap.build_envelope(
+        [{"type": "node", "id": 1, "tags": {"name": "A"}}],
+        bbox=(12.75, 77.45, 13.15, 77.8),
+    )
+    snap.write_snapshot(path, envelope)
+    return path
+
+
+def test_a_fresh_city_passes(data_dir):
+    write_provenance(data_dir)
+    write_snapshot(data_dir)
+
+    result = preflight.check_city_data()
+
+    assert result.ok and not result.warning
+    assert "7683 places" in result.detail
+
+
+def test_a_missing_provenance_fails(data_dir):
+    """The silent-empty-city case: healthy boot, no data, nothing fails.
+
+    Nothing else in the boot path can catch this, which is the reason the check
+    exists at all.
+    """
+
+    write_snapshot(data_dir)
+
+    result = preflight.check_city_data()
+
+    assert not result.ok
+    assert "build_city" in result.detail
+
+
+def test_a_provenance_record_with_no_snapshot_fails(data_dir):
+    """The record would claim a city nothing can rebuild."""
+
+    write_provenance(data_dir)
+
+    result = preflight.check_city_data()
+
+    assert not result.ok
+    assert "--refresh" in result.detail
+
+
+def test_unreadable_provenance_fails_rather_than_being_skipped(data_dir):
+    (data_dir / "city_provenance.json").write_text("{ not json")
+    write_snapshot(data_dir)
+
+    result = preflight.check_city_data()
+
+    assert not result.ok
+    assert "unreadable" in result.detail
+
+
+def test_an_old_city_is_a_warning_not_a_failure(data_dir):
+    """Stale data is a debt. Refusing to boot over it would be worse."""
+
+    old = (datetime.now(timezone.utc) - timedelta(days=800)).isoformat()
+    write_provenance(data_dir, snapshot_fetched_at=old)
+    write_snapshot(data_dir)
+
+    result = preflight.check_city_data()
+
+    assert result.ok
+    assert result.warning
+    assert "--refresh" in result.detail
+
+
+def test_a_city_with_no_usable_timestamp_warns(data_dir):
+    write_provenance(data_dir, snapshot_fetched_at="sometime last year")
+    write_snapshot(data_dir)
+
+    result = preflight.check_city_data()
+
+    assert result.ok
+    assert result.warning
+    assert "timestamp" in result.detail
+
+
+def test_the_real_check_passes_on_the_committed_city():
+    """Not a fixture: the snapshot and record actually in the repository."""
+
+    result = preflight.check_city_data()
+
+    assert result.ok, result.detail
+    assert "places" in result.detail
+
+
 # ---------- the report ----------
 
 
@@ -292,6 +412,7 @@ def test_every_check_reports_under_a_name(monkeypatch, build):
         "frontend build",
         "app icons",
         "CORS origins",
+        "city data",
         "proxy trust",
         "migrations",
     }

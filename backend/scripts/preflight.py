@@ -13,9 +13,11 @@ Exits non-zero if any check fails, so it can gate a deploy.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -219,6 +221,82 @@ def check_cors() -> Result:
     return Result("CORS origins", True, configured)
 
 
+def check_city_data() -> Result:
+    """Is there a record of where the city came from, and is it recent?
+
+    This is the one check that cannot be satisfied by configuration, and it
+    exists because the failure it guards against is invisible. Every other
+    misconfiguration announces itself: a missing frontend serves no page, a bad
+    secret stops the boot. A deployment with no data boots perfectly, passes
+    every other check, answers `/health/live`, and shows a reader an empty map.
+    `GET /stats` reporting `places: 0` is the only symptom, and nothing in the
+    boot path looks at it.
+
+    So the provenance record is required, and the snapshot's age is reported. It
+    cannot check the live database's contents without importing SQLAlchemy,
+    which would make preflight depend on the app and mean it could no longer run
+    before migrations; the record plus a `/stats` glance is the honest limit of
+    what a boot-time check can say.
+    """
+
+    provenance = BACKEND / "data" / "city_provenance.json"
+    snapshot = BACKEND / "data" / "osm_snapshot.json.gz"
+    stale_after_days = 365
+
+    if not provenance.is_file():
+        return Result(
+            "city data",
+            False,
+            f"{provenance} is absent, so nothing records where the city came "
+            "from. Run `python -m scripts.build_city` to build it from the "
+            "committed snapshot.",
+        )
+
+    try:
+        record = json.loads(provenance.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        return Result("city data", False, f"{provenance} is unreadable: {exc}")
+
+    if not snapshot.is_file():
+        return Result(
+            "city data",
+            False,
+            f"{snapshot} is absent, so the city cannot be rebuilt. Run "
+            "`python -m scripts.build_city --refresh`.",
+        )
+
+    places = record.get("places_imported")
+    digest = str(record.get("snapshot_digest") or "none recorded")
+    fetched_at = record.get("snapshot_fetched_at")
+    age: float | None = None
+    if isinstance(fetched_at, str):
+        try:
+            when = datetime.fromisoformat(fetched_at)
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - when).total_seconds() / 86_400
+        except ValueError:
+            age = None
+
+    detail = f"{places} places from {fetched_at}, {digest[:23]}"
+    if age is None:
+        return Result(
+            "city data",
+            True,
+            f"{detail}, but it records no usable timestamp",
+            warning=True,
+        )
+    if age > stale_after_days:
+        return Result(
+            "city data",
+            True,
+            f"{detail}, {age:.0f} days old. Run "
+            "`python -m scripts.build_city --refresh` when convenient.",
+            warning=True,
+        )
+    return Result("city data", True, f"{detail}, {age:.0f} days old")
+
+
 def check_proxy_trust() -> Result:
     """`TABIKO_TRUST_PROXY` makes the rate limiter read a spoofable header.
 
@@ -286,6 +364,7 @@ CHECKS = (
     check_static,
     check_icons,
     check_cors,
+    check_city_data,
     check_proxy_trust,
     check_schema,
 )

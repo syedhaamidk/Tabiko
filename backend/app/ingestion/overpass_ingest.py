@@ -95,6 +95,86 @@ def build_bbox_query(
     """
 
 
+def tile_bbox(
+    bbox: tuple[float, float, float, float], rows: int, columns: int
+) -> list[tuple[float, float, float, float]]:
+    """Split a bounding box into a grid of smaller ones.
+
+    A single city-wide Overpass query is the shape that reliably times out: the
+    free endpoints rate-limit by cost, and one query returning every food venue
+    in a metropolis is expensive. A grid of small queries is individually cheap,
+    so each is more likely to be answered, and a tile that fails costs one tile
+    rather than the whole city.
+    """
+
+    south, west, north, east = bbox
+    if rows < 1 or columns < 1:
+        raise ValueError("rows and columns must both be at least 1")
+
+    lat_step = (north - south) / rows
+    lon_step = (east - west) / columns
+    return [
+        (
+            south + row * lat_step,
+            west + column * lon_step,
+            south + (row + 1) * lat_step,
+            west + (column + 1) * lon_step,
+        )
+        for row in range(rows)
+        for column in range(columns)
+    ]
+
+
+def fetch_bbox_tiled(
+    bbox: tuple[float, float, float, float],
+    *,
+    rows: int = 4,
+    columns: int = 4,
+    urls: Sequence[str] | None = None,
+    attempts_per_url: int = 2,
+    request_timeout: float = 180.0,
+    on_tile: Any = None,
+) -> list[dict[str, Any]]:
+    """Fetch a whole area as a grid of small queries and merge the results.
+
+    Tiles overlap at the edges in OSM's own indexing, so the same object can
+    appear in two of them. Deduplication is by `type-id`, which is stable across
+    Overpass responses, so a place on a tile boundary is stored once.
+
+    `on_tile` is called with `(index, total, count)` after each tile so a caller
+    can report progress on a run that takes several minutes.
+    """
+
+    tiles = tile_bbox(bbox, rows, columns)
+    merged: dict[str, dict[str, Any]] = {}
+    total = len(tiles)
+
+    for index, tile in enumerate(tiles, start=1):
+        if on_tile is not None:
+            on_tile(index, total, 0)
+        elements = fetch_elements(
+            build_bbox_query(*tile, timeout_s=180),
+            urls=urls,
+            attempts_per_url=attempts_per_url,
+            request_timeout=request_timeout,
+        )
+        for element in elements:
+            source_id = _osm_source_id(element)
+            if source_id is not None and source_id in merged:
+                continue
+            if source_id is not None:
+                merged[source_id] = element
+            else:
+                # Keep unidentifiable elements rather than dropping them: they
+                # cannot be upserted anyway, but discarding them here would make
+                # the tile count a lie.
+                merged[f"unidentified-{index}-{len(merged)}"] = element
+        if on_tile is not None:
+            on_tile(index, total, len(merged))
+
+    return list(merged.values())
+
+
 def fetch_places(
     lat: float,
     lon: float,
