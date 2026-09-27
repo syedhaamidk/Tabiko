@@ -73,6 +73,9 @@ const ICONS = {
   seating: `<path d="M5 12V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 12h18v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M6 18v3M18 18v3"/>`,
   bookmark: `<path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4-6.5 4v-16a1 1 0 0 1 1-1Z"/>`,
   "bookmark-filled": `<path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4-6.5 4v-16a1 1 0 0 1 1-1Z" fill="currentColor"/>`,
+  // Two figures, not a group: this is a people button, and a crowd of five
+  // reads as "community" rather than "the accounts I follow".
+  people: `<circle cx="9.5" cy="8.5" r="3.2"/><path d="M3.5 19.5a6 6 0 0 1 12 0"/><path d="M16 5.6a3.2 3.2 0 0 1 0 5.8"/><path d="M17.5 14.2a6 6 0 0 1 3 5.3"/>`,
   walk: `<circle cx="13" cy="4.5" r="2"/><path d="m11 21 2-6-2.5-3 1-4.5L15 9l3 1"/><path d="M9.5 11.5 7 15H4"/>`,
   clock: `<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>`,
 };

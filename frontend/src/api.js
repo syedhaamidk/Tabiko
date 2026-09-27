@@ -319,6 +319,60 @@ export function uploadImage(file) {
   }).then(handleResponse);
 }
 
+// ---------- Following people ----------
+
+/**
+ * Follow state for one reader.
+ *
+ * Note what this does *not* do: the reviews list returns reviewer ids but not
+ * whether the viewer follows them, so a page with several reviewers costs one
+ * of these per reviewer. That is deliberate for now and is written up at the
+ * bottom of the back-end's `tests/test_follows.py` with the three ways to
+ * batch it. Do not "fix" it here by fetching it eagerly for every author on
+ * mount -- that is the same N+1 with extra work before anything is visible.
+ */
+export function getFollowStatus(userId) {
+  return authFetch(`${BASE_URL}/users/${userId}/follow-status`).then(handleResponse);
+}
+
+export function followUser(userId) {
+  return authFetch(`${BASE_URL}/users/${userId}/follow`, {
+    method: "POST",
+  }).then(handleResponse);
+}
+
+export function unfollowUser(userId) {
+  return authFetch(`${BASE_URL}/users/${userId}/follow`, {
+    method: "DELETE",
+  }).then(handleResponse);
+}
+
+export function listMyFollowing() {
+  return authFetch(`${BASE_URL}/users/me/following`).then(handleResponse);
+}
+
+/** Reviews by people the signed-in reader follows, newest first. */
+export function getFollowingFeed() {
+  return authFetch(`${BASE_URL}/feed/following`).then(handleResponse);
+}
+
+/**
+ * The reviews for one place, optionally narrowed to people the reader follows.
+ *
+ * `followingOnly` asks the server rather than filtering the returned list. The
+ * alternative would send every review and hide most of them, which tells the
+ * reader nothing about whether they follow anybody -- and the server has to know
+ * the answer anyway to decide whether a signed-out reader gets a 401.
+ */
+export function getRestaurantReviews(restaurantId, { followingOnly = false } = {}) {
+  const params = new URLSearchParams();
+  if (followingOnly) params.set("following_only", "true");
+  const query = params.toString();
+  return authFetch(
+    `${BASE_URL}/reviews/restaurant/${restaurantId}${query ? `?${query}` : ""}`,
+  ).then(handleResponse);
+}
+
 export function logout() {
   const refresh = getRefreshToken();
   // Clear locally first: the reader asked to sign out, so the session is over

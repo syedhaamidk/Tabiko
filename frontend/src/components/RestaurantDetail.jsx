@@ -5,9 +5,10 @@ import {
   confirmMenu,
   createReview,
   getRestaurant,
+  getRestaurantReviews,
   listDishes,
-  listReviews,
 } from "../api";
+import FollowButton from "./FollowButton";
 import { useTheme } from "../ThemeContext";
 import { useAuth } from "../AuthContext";
 import BrandMark from "./BrandMark";
@@ -164,10 +165,21 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
   const [locating, setLocating] = useState(false);
   const [actionError, setActionError] = useState(null);
   const [copied, setCopied] = useState(false);
+  // "Only people I follow" on the reviews list. Null means "not decided yet", so
+  // the first load is the unfiltered list and the checkbox does not change what
+  // a signed-out reader sees until they actually tick it.
+  const [followingOnly, setFollowingOnly] = useState(false);
+  const [reviewsError, setReviewsError] = useState(null);
+  // Bumped whenever a follow or unfollow settles. A list filtered to "people I
+  // follow" is derived from that set, so unfollowing someone has to invalidate
+  // it -- otherwise the reader drops the person and their review stays on screen
+  // until they navigate away and back.
+  const [followsVersion, setFollowsVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoadError(null);
+    setReviewsError(null);
     applyThemeForRestaurant(restaurantId);
     getRestaurant(restaurantId)
       .then((data) => !cancelled && setRestaurant(data))
@@ -175,14 +187,27 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
     listDishes(restaurantId)
       .then((data) => !cancelled && setDishes(data))
       .catch(() => {});
-    listReviews(restaurantId)
+    // The filter is a server-side question, not a client-side one: the server
+    // has to know the viewer's follows to answer, and a signed-out reader asking
+    // for a filtered list gets a 401 rather than a blank panel. Filtering the
+    // list that was already fetched would hide reviews without saying why they
+    // went away.
+    getRestaurantReviews(restaurantId, { followingOnly })
       .then((data) => !cancelled && setReviews(data))
-      .catch(() => {});
+      .catch((error) => {
+        if (cancelled) return;
+        setReviews([]);
+        setReviewsError(error.message);
+      });
     return () => {
       cancelled = true;
       resetTheme();
     };
-  }, [restaurantId, applyThemeForRestaurant, resetTheme]);
+    // `followingOnly` is in here because the effect reads it. Leaving it out is
+    // the kind of omission a linter can catch and a test that only ever renders
+    // the unfiltered list cannot: the checkbox ticks, the label changes, and
+    // nothing refetches, so the list silently keeps showing everyone.
+  }, [restaurantId, applyThemeForRestaurant, resetTheme, followingOnly, followsVersion]);
 
   async function handleSubmitReview(event) {
     event.preventDefault();
@@ -631,10 +656,29 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
           )}
 
           <div className="review-list">
-            {reviews.length === 0 ? (
+            {user ? (
+              <label className="review-filter">
+                <input
+                  type="checkbox"
+                  checked={followingOnly}
+                  onChange={(event) => setFollowingOnly(event.target.checked)}
+                  data-testid="following-only"
+                />
+                Only people I follow
+              </label>
+            ) : null}
+
+            {reviewsError ? (
+              <div className="panel-empty" role="alert">
+                <InterfaceIcon name="solo" size={22} />
+                {reviewsError}
+              </div>
+            ) : reviews.length === 0 ? (
               <div className="panel-empty">
                 <InterfaceIcon name="sparkles" size={22} />
-                Be the first neighbor to leave a flavor note.
+                {followingOnly
+                  ? "Nobody you follow has reviewed this place yet."
+                  : "Be the first neighbor to leave a flavor note."}
               </div>
             ) : (
               reviews.map((review) => (
@@ -647,6 +691,12 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
                       <strong>{review.reviewer.name}</strong>
                       <ReviewerBadges reviewer={review.reviewer} />
                     </div>
+                    <FollowButton
+                      userId={review.reviewer.id}
+                      name={review.reviewer.name}
+                      compact
+                      onChange={() => setFollowsVersion((value) => value + 1)}
+                    />
                     <span className="review-card__rating">{review.rating}★</span>
                   </div>
                   <p>{review.text || "No written review — just a rating."}</p>

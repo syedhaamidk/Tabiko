@@ -13,7 +13,13 @@ import RestaurantDetail from "./RestaurantDetail";
 vi.mock("../api", () => ({
   getRestaurant: vi.fn(),
   listDishes: vi.fn(),
-  listReviews: vi.fn(),
+  getRestaurantReviews: vi.fn(),
+  // FollowButton renders inside every review, so these are reached as soon as a
+  // review list has an author in it. Absent exports fail as unhandled rejections
+  // rather than test failures, which is a miserable way to find out.
+  getFollowStatus: vi.fn(),
+  followUser: vi.fn(),
+  unfollowUser: vi.fn(),
   addDish: vi.fn(),
   addDishesBulk: vi.fn(),
   createReview: vi.fn(),
@@ -29,7 +35,17 @@ const themeSpy = { applyThemeForRestaurant: vi.fn(), resetTheme: vi.fn() };
 vi.mock("../ThemeContext", () => ({ useTheme: () => themeSpy }));
 vi.mock("../AuthContext", () => ({ useAuth: vi.fn() }));
 
-import { addDish, addDishesBulk, confirmMenu, getRestaurant, listDishes, listReviews } from "../api";
+import {
+  addDish,
+  addDishesBulk,
+  confirmMenu,
+  getRestaurant,
+  getRestaurantReviews,
+  listDishes,
+  getFollowStatus,
+  followUser,
+  unfollowUser,
+} from "../api";
 import { useAuth } from "../AuthContext";
 
 const PLACE = {
@@ -55,11 +71,150 @@ const dish = (id, name, addedBy = null) => ({
 const READER = { id: 1, name: "Asha", is_critic_verified: false };
 const CRITIC = { id: 2, name: "Rahul", is_critic_verified: true };
 
+/**
+ * Defaults for the follow calls FollowButton makes.
+ *
+ * Set at the top level rather than per describe, because FollowButton renders
+ * inside every review and an unstubbed `getFollowStatus` returns undefined --
+ * which fails as an unhandled rejection somewhere else entirely, not as a
+ * failure of the test that caused it.
+ */
+beforeEach(() => {
+  getFollowStatus.mockResolvedValue({
+    is_following: false,
+    follower_count: 0,
+    following_count: 0,
+  });
+  followUser.mockResolvedValue({
+    is_following: true,
+    follower_count: 1,
+    following_count: 1,
+  });
+  unfollowUser.mockResolvedValue({
+    is_following: false,
+    follower_count: 0,
+    following_count: 0,
+  });
+  // Some describes assert the unfiltered request, so the default has to say so.
+  getFollowStatus.mockResolvedValue({
+    is_following: false,
+    follower_count: 0,
+    following_count: 0,
+  });
+});
+
 async function renderDetail() {
   const result = render(<RestaurantDetail restaurantId={7} onBack={vi.fn()} />);
   await screen.findByRole("heading", { name: "Toit" });
   return result;
 }
+
+describe("narrowing the reviews to people you follow", () => {
+  const reviewFrom = (id, name) => ({
+    id,
+    user_id: name === "Asha" ? READER.id : 2,
+    restaurant_id: 7,
+    dish_id: null,
+    rating: 5,
+    text: `From ${name}`,
+    verification_tier: "unverified",
+    fraud_flag: false,
+    created_at: "2026-01-01T12:00:00Z",
+    image_url: null,
+    reviewer: {
+      id: name === "Asha" ? READER.id : 2,
+      name,
+      reviewer_type: "normal",
+      is_critic_verified: false,
+      cuisine_specialty: null,
+      is_regular_here: false,
+    },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAuth.mockReturnValue({ user: READER });
+    getRestaurant.mockResolvedValue(PLACE);
+    listDishes.mockResolvedValue([]);
+  });
+
+  it("asks the server for the filtered list rather than hiding rows locally", async () => {
+    getRestaurantReviews.mockResolvedValue([reviewFrom(1, "Asha"), reviewFrom(2, "Rahul")]);
+    await renderDetail();
+    expect(screen.getByText("From Asha")).toBeInTheDocument();
+
+    getRestaurantReviews.mockResolvedValue([reviewFrom(2, "Rahul")]);
+    await userEvent.click(screen.getByTestId("following-only"));
+
+    await screen.findByText("From Rahul");
+    expect(screen.queryByText("From Asha")).not.toBeInTheDocument();
+
+    // The filter is a server-side question, and the server is the only thing
+    // that knows who the viewer follows. Filtering an already-fetched list would
+    // send reviews a reader is not allowed to see and hide them silently.
+    expect(getRestaurantReviews).toHaveBeenLastCalledWith(7, { followingOnly: true });
+    expect(getRestaurantReviews).toHaveBeenNthCalledWith(1, 7, { followingOnly: false });
+  });
+
+  it("explains an empty filtered list instead of shrugging", async () => {
+    getRestaurantReviews.mockResolvedValue([reviewFrom(1, "Asha")]);
+    await renderDetail();
+
+    getRestaurantReviews.mockResolvedValue([]);
+    await userEvent.click(screen.getByTestId("following-only"));
+
+    expect(
+      await screen.findByText(/nobody you follow has reviewed this place yet/i),
+    ).toBeInTheDocument();
+    // And not the first-run wording, which would be a different claim.
+    expect(screen.queryByText(/be the first neighbor/i)).not.toBeInTheDocument();
+  });
+
+  it("surfaces the server's reason rather than showing an empty list", async () => {
+    getRestaurantReviews.mockResolvedValue([reviewFrom(1, "Asha")]);
+    await renderDetail();
+
+    getRestaurantReviews.mockRejectedValue(
+      new Error("Sign in to see reviews from people you follow."),
+    );
+    await userEvent.click(screen.getByTestId("following-only"));
+
+    // A 401 here would otherwise look exactly like "you follow nobody", and the
+    // reader would have no way to tell the two apart.
+    expect(await screen.findByRole("alert")).toHaveTextContent(/sign in/i);
+  });
+
+  it("drops a review from the filtered list when you unfollow its author", async () => {
+    // The filtered list is derived from who the reader follows, so a follow
+    // change has to invalidate it. Otherwise unfollowing leaves the review on
+    // screen until the reader navigates away and back, which reads as the app
+    // having ignored the click.
+    getRestaurantReviews.mockResolvedValue([reviewFrom(2, "Rahul")]);
+    await renderDetail();
+
+    await userEvent.click(screen.getByTestId("following-only"));
+    await screen.findByText("From Rahul");
+
+    // The server, having been told, now returns nothing for this viewer.
+    getRestaurantReviews.mockResolvedValue([]);
+    await userEvent.click(await screen.findByTestId("follow-2"));
+
+    expect(
+      await screen.findByText(/nobody you follow has reviewed this place yet/i),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no filter to a signed-out reader", async () => {
+    useAuth.mockReturnValue({ user: null });
+    getRestaurantReviews.mockResolvedValue([reviewFrom(2, "Rahul")]);
+
+    await renderDetail();
+
+    // The endpoint needs an account, and a control that always 401s is worse
+    // than no control.
+    expect(screen.queryByTestId("following-only")).not.toBeInTheDocument();
+  });
+});
 
 describe("the empty menu", () => {
   beforeEach(() => {
@@ -67,7 +222,7 @@ describe("the empty menu", () => {
     useAuth.mockReturnValue({ user: READER });
     getRestaurant.mockResolvedValue(PLACE);
     listDishes.mockResolvedValue([]);
-    listReviews.mockResolvedValue([]);
+    getRestaurantReviews.mockResolvedValue([]);
   });
 
   it("asks a signed-in reader to fill it in rather than shrugging", async () => {
@@ -104,7 +259,7 @@ describe("adding a whole menu", () => {
     useAuth.mockReturnValue({ user: READER });
     getRestaurant.mockResolvedValue(PLACE);
     listDishes.mockResolvedValue([]);
-    listReviews.mockResolvedValue([]);
+    getRestaurantReviews.mockResolvedValue([]);
   });
 
   it("sends the pasted text and shows the dishes that landed", async () => {
@@ -200,7 +355,7 @@ describe("crediting the contributor", () => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({ user: READER });
     getRestaurant.mockResolvedValue(PLACE);
-    listReviews.mockResolvedValue([]);
+    getRestaurantReviews.mockResolvedValue([]);
   });
 
   it("names whoever added a dish", async () => {
@@ -235,7 +390,7 @@ describe("a place that already has a menu", () => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({ user: READER });
     getRestaurant.mockResolvedValue(PLACE);
-    listReviews.mockResolvedValue([]);
+    getRestaurantReviews.mockResolvedValue([]);
     listDishes.mockResolvedValue([dish(1, "Masala Dosa", READER)]);
   });
 
@@ -279,7 +434,7 @@ describe("the single-dish form still works", () => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({ user: READER });
     getRestaurant.mockResolvedValue(PLACE);
-    listReviews.mockResolvedValue([]);
+    getRestaurantReviews.mockResolvedValue([]);
     listDishes.mockResolvedValue([]);
   });
 
@@ -309,7 +464,7 @@ describe("vouching for a menu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuth.mockReturnValue({ user: READER });
-    listReviews.mockResolvedValue([]);
+    getRestaurantReviews.mockResolvedValue([]);
     listDishes.mockResolvedValue([dish(1, "Masala Dosa", READER)]);
   });
 

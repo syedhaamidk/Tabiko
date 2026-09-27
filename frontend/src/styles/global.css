@@ -935,6 +935,119 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+/* ---------- Following people ---------- */
+
+/* The follow button. Pill-shaped like the other small controls so it reads as
+   part of the same family, and quiet by default: a list of reviews should look
+   like reviews, not like a directory of people to follow. */
+.follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.follow__button {
+  min-height: 28px;
+  padding: 0.2rem 0.6rem;
+  border: 2px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-cream) 90%, transparent);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.follow__button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+
+.follow__button.is-following {
+  /* Filled rather than outlined, so "already following" is legible at a glance
+     across a list. Checked, not filled: the button is still an action. */
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-cream));
+  border-color: color-mix(in srgb, var(--color-primary) 38%, transparent);
+}
+
+.follow__button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.follow__error {
+  font-size: 0.66rem;
+  color: color-mix(in srgb, var(--color-primary) 75%, var(--color-text));
+}
+
+/* The "only people I follow" filter, above a review list. */
+.review-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-cream) 80%, transparent);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.review-filter input {
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* The friends feed. A numbered-looking ordered list would imply rank, and there
+   is none: it is newest first, so the list style is removed entirely. */
+.feed-list {
+  list-style: none;
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+}
+
+.feed-place {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: color-mix(in srgb, var(--color-primary) 80%, var(--color-text));
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.feed-place:hover {
+  color: var(--color-primary);
+}
+
+.following-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.75rem;
+  margin: 0.85rem 0 0;
+  padding: 0.85rem 0 0;
+  border-top: 1px dashed color-mix(in srgb, var(--color-text) 14%, transparent);
+  font-size: 0.78rem;
+}
+
+.following-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .saved-toggle {
   display: inline-flex;
   align-items: center;
@@ -4181,6 +4294,22 @@ body {
   .restaurant-card__flavor-sticker { top: 68px; }
   .good-food-stamp { width: 50px; height: 50px; }
   .detail-hero__ticker { display: none; }
+}
+
+/* Visually hidden, still announced. Used for the follow button's accessible
+   name, so a screen reader hears "Follow Bala" rather than ten buttons all
+   called "Follow". The clip-path is the modern form; the rest is for the older
+   engines that still need it. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

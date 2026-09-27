@@ -7,6 +7,7 @@ import PlaceSearch from "./components/PlaceSearch";
 import NearbyBar from "./components/NearbyBar";
 import CravingSearchBar from "./components/CravingSearchBar";
 import MapView from "./components/MapView";
+import FriendsFeed from "./components/FriendsFeed";
 import AuthBar from "./components/AuthBar";
 import BrandMark from "./components/BrandMark";
 import InterfaceIcon from "./components/InterfaceIcon";
@@ -36,7 +37,7 @@ const PAGE_SIZE = 100;
 const VISIBLE_STEP = 48;
 
 function MainApp() {
-  const { loading: authLoading } = useAuth();
+  const { loading: authLoading, user: authUser } = useAuth();
   const [selectedId, setSelectedId] = useState(null);
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [restaurants, setRestaurants] = useState([]);
@@ -53,6 +54,11 @@ function MainApp() {
   const [totalCount, setTotalCount] = useState(null);
   const [stats, setStats] = useState(null);
   const [savedOnly, setSavedOnly] = useState(false);
+  // The Friends feed is a separate view from the map and the grid, not a filter
+  // on either: it is a list of reviews rather than a list of places, so it does
+  // not belong in the same `viewMode` toggle.
+  const [showingFriends, setShowingFriends] = useState(false);
+  const authSignedIn = Boolean(authUser);
   const [savedPlaces, setSavedPlaces] = useState(null);
   const [savedStatus, setSavedStatus] = useState("idle");
   const [savedRefresh, setSavedRefresh] = useState(0);
@@ -373,6 +379,21 @@ function MainApp() {
                     <span className="saved-toggle__count">{favorites.count}</span>
                   )}
                 </button>
+                <button
+                  type="button"
+                  className={`saved-toggle${showingFriends ? " is-active" : ""}`}
+                  onClick={() => setShowingFriends((value) => !value)}
+                  aria-pressed={showingFriends}
+                  disabled={!authSignedIn}
+                  title={
+                    authSignedIn
+                      ? "Show reviews from the people you follow"
+                      : "Sign in to see reviews from people you follow"
+                  }
+                >
+                  <InterfaceIcon name="people" size={15} />
+                  Friends
+                </button>
                 <div className="view-toggle" role="group" aria-label="Result view">
                   <button
                     className={viewMode === "grid" ? "is-active" : ""}
@@ -394,7 +415,9 @@ function MainApp() {
               </div>
             </div>
 
-            {viewMode === "grid" ? (
+            {showingFriends ? (
+              <FriendsFeed onOpenRestaurant={openRestaurant} />
+            ) : viewMode === "grid" ? (
               <LocationGate
                 status={location.status}
                 locating={location.locating}
