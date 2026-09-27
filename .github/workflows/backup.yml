@@ -1,0 +1,125 @@
+name: Nightly backup
+
+# A backup nobody ever restores is a hope, not a backup. This runs nightly because
+# the thing being protected is a database that only exists on one machine and is
+# rebuilt from a committed snapshot -- the snapshot is reproducible, but the
+# dishes, reviews and accounts that readers contributed are not, and there is no
+# second copy of those anywhere.
+#
+# The artefact is deliberately a backup, not a database: the restore script
+# verifies every file in it before writing anything, so what gets uploaded is the
+# thing that is actually proven restorable.
+
+on:
+  schedule:
+    # 03:17 UTC. Off the hour on purpose: every scheduled workflow in the world
+    # fires at :00, and the shared runners are measurably worse at the top of the
+    # hour.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: Back up and prove it restores
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r backend/requirements-dev.txt
+
+      - name: Build the city so there is something to back up
+        working-directory: backend
+        env:
+          TABIKO_JWT_SECRET: ci-only-secret-that-is-long-enough-to-pass-validation
+        run: |
+          python -m scripts.build_city
+          python -m scripts.seed_reference_data
+
+      - name: Add a reader, so the backup holds more than the city
+        # A backup of only reproducible data proves nothing. This is the part
+        # that could actually be lost.
+        working-directory: backend
+        env:
+          TABIKO_JWT_SECRET: ci-only-secret-that-is-long-enough-to-pass-validation
+        run: |
+          python - <<'PY'
+          import sqlite3
+          from app import auth
+          from app.models import Base, User, Dish
+          from app.database import SessionLocal
+
+          Base.metadata.create_all(bind=SessionLocal.kw["bind"])
+          db = SessionLocal()
+          try:
+              user = User(
+                  name="Backup Probe",
+                  email="backup-probe@tabiko.in",
+                  password_hash=auth.hash_password("probe-pass-2026"),
+              )
+              db.add(user)
+              db.commit()
+              db.refresh(user)
+              dish = db.query(Dish).first()
+              dish.added_by_user_id = user.id
+              db.commit()
+              print("reader attributed to a dish")
+          finally:
+              db.close()
+          PY
+
+      - name: Take the backup
+        working-directory: backend
+        run: python -m scripts.backup create
+
+      - name: Prove the backup restores
+        # Destroy the data, restore over the top, and check it came back. A
+        # backup script that is only ever run forwards is a backup whose first
+        # real use is also its first test.
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          latest="$(python -m scripts.backup list | head -1 | awk '{print $1}')"
+          echo "--- dry run first ---"
+          python -m scripts.backup restore "backups/$latest" --dry-run
+
+          echo "--- destroy the reader data ---"
+          python - <<'PY'
+          import sqlite3
+          c = sqlite3.connect("tabiko.db")
+          c.executescript("delete from dishes; delete from users;")
+          c.commit()
+          print("  dishes now:", c.execute("select count(*) from dishes").fetchone()[0])
+          c.close()
+          PY
+
+          echo "--- restore ---"
+          python -m scripts.backup restore "backups/$latest" --force
+
+          echo "--- confirm ---"
+          python - <<'PY'
+          import sqlite3, sys
+          c = sqlite3.connect("tabiko.db")
+          dishes = c.execute("select count(*) from dishes").fetchone()[0]
+          users = c.execute("select count(*) from users").fetchone()[0]
+          places = c.execute("select count(*) from restaurants").fetchone()[0]
+          print(f"  dishes {dishes}, users {users}, places {places}")
+          if dishes == 0 or users == 0 or places == 0:
+              sys.exit("the restore did not bring the data back")
+          print("  RESTORE VERIFIED")
+          c.close()
+          PY
+
+      - name: Upload the backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabiko-backup
+          path: backend/backups/
+          retention-days: 14
+          if-no-files-found: error

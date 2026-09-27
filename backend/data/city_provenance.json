@@ -9,7 +9,7 @@
   "database": "tabiko.db",
   "overpass_endpoint": "https://overpass-api.de/api/interpreter",
   "places_imported": 7683,
-  "recorded_at": "2026-09-27T04:52:37.647197+00:00",
+  "recorded_at": "2026-09-27T09:45:46.748203+00:00",
   "schema": 1,
   "snapshot_digest": "sha256:62fe5eddb61f680ff4652eebb79f6fdc94bdd3e6d6572eafbb278bbe7e543bdb",
   "snapshot_element_count": 7890,

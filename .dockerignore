@@ -59,3 +59,5 @@ frontend/dist/
 **/*.db-wal
 **/*.sqlite
 **/*.sqlite3
+backups/
+*.pre-restore-*

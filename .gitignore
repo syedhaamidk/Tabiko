@@ -29,3 +29,5 @@ id_rsa*
 e2e_*.txt
 probe_*.txt
 *.scratch
+backups/
+*.pre-restore-*

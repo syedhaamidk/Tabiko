@@ -300,6 +300,42 @@ def migrate(url: str) -> None:
         )
 
 
+def destructive_targets(database: Path) -> dict[str, int]:
+    """Count the rows a rebuild would destroy.
+
+    The city itself is not data anyone entered. Dishes, reviews, users, saved
+    places and sessions are: they are what the contribution flow exists to
+    produce, and `build_city` deletes the database file outright. A rebuild
+    against a populated database is therefore the one command in this repository
+    that can silently throw away a reader's work.
+    """
+
+    if not database.is_file():
+        return {}
+    try:
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return {}
+    try:
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "select name from sqlite_master where type='table'"
+            )
+        }
+        counts: dict[str, int] = {}
+        for table in ("dishes", "reviews", "users", "favorites", "refresh_tokens"):
+            if table in tables:
+                counts[table] = connection.execute(
+                    f"select count(*) from {table}"
+                ).fetchone()[0]
+        return {table: count for table, count in counts.items() if count}
+    except sqlite3.Error:
+        return {}
+    finally:
+        connection.close()
+
+
 def count_places(database: Path) -> int:
     """How many places are already in `database`, or 0 if it has no schema yet."""
 
@@ -345,6 +381,14 @@ def main() -> int:
     )
     parser.add_argument("--url", help="Use only this Overpass endpoint.")
     parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Rebuild even though the database holds reader-created data. "
+            "Without this the command refuses and tells you what it found."
+        ),
+    )
+    parser.add_argument(
         "--if-empty",
         action="store_true",
         help=(
@@ -384,6 +428,28 @@ def main() -> int:
         log(
             f"{args.database.name} is empty and a snapshot is committed. Building the city."
         )
+
+    # ---------- the destructive-rebuild guard ----------
+    #
+    # This is the one command in the repository that can throw away a reader's
+    # work. It deletes the database file, and the whole point of the contribution
+    # flow is that dishes, reviews and accounts accumulate in that file. Nobody
+    # should be able to lose them to a re-import typed without thinking.
+    if not args.verify and not args.if_empty and not args.force:
+        at_risk = destructive_targets(args.database)
+        if at_risk:
+            log("Refusing to rebuild. This database holds reader-created data:")
+            for table, count in sorted(at_risk.items(), key=lambda item: -item[1]):
+                log(f"    {count:>7}  {table}")
+            log("")
+            log(f"    file: {args.database}")
+            log("")
+            log("Rebuilding replaces the file, so all of the above would be lost.")
+            log("To do it anyway, pass --force, and take a backup first:")
+            log("    python -m scripts.backup")
+            log("")
+            log("To check what changed without touching anything, use --verify.")
+            return 3
 
     log(f"City bbox: {CITY_BBOX}")
 
