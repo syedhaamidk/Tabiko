@@ -22,7 +22,7 @@
   },
   "cafe_bakery": {
     "palette": { "primary": "#A9746E", "secondary": "#E8C4A2", "background": "#FDF6F0", "text": "#33221F" },
-    "font_pair": { "display": "'Caveat', cursive", "body": "'Quicksand', sans-serif" },
+    "font_pair": { "display": "'Baloo 2', cursive", "body": "'Quicksand', sans-serif" },
     "texture": "kraft-paper",
     "icon_style": "soft-rounded",
     "motion": "coffee-steam-drift"
