@@ -150,6 +150,9 @@ class Dish(Base):
     tags = Column(String(255), nullable=True)  # e.g. "spicy,veg,bestseller"
     avg_rating = Column(Float, nullable=False, default=0.0)
     review_count = Column(Integer, nullable=False, default=0)
+    # A URL, never the bytes. See migration 0008 for why the image is a file on
+    # the same volume rather than a blob in this table.
+    image_url = Column(String(500), nullable=True)
     # Whoever typed it in. Nullable because dishes can be imported or seeded, and
     # a dish nobody claimed is honest to show as unattributed rather than invented.
     added_by_user_id = Column(
@@ -221,6 +224,9 @@ class Review(Base):
     fraud_reason = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, nullable=False, default=utc_now)
+
+    # A URL, never the bytes, for the same reason as `Dish.image_url`.
+    image_url = Column(String(500), nullable=True)
 
     user = relationship("User", back_populates="reviews")
     restaurant = relationship("Restaurant", back_populates="reviews")

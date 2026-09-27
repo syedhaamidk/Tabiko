@@ -4,6 +4,7 @@ import json
 import math
 import os
 import secrets
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -34,6 +35,7 @@ from . import (
     ratelimit,
     schemas,
     trust,
+    uploads,
 )
 from .database import Base, engine, get_db
 from .models import utc_now
@@ -212,6 +214,7 @@ def _serialize_review(db: Session, review: models.Review) -> schemas.ReviewOut:
         fraud_flag=review.fraud_flag,
         fraud_reason=review.fraud_reason,
         created_at=review.created_at,
+        image_url=review.image_url,
         reviewer=schemas.ReviewerInfo(
             id=reviewer.id,
             name=reviewer.name,
@@ -1054,6 +1057,140 @@ def _merge_tags(current: str | None, incoming: list[str] | None) -> str | None:
     return ", ".join(merged) or None
 
 
+UPLOAD_RATE_LIMIT = int(os.getenv("TABIKO_UPLOAD_RATE_LIMIT", "30"))
+UPLOAD_RATE_WINDOW_SECONDS = 3600
+
+
+def _limit_upload(user_id: int, request: Request) -> None:
+    """Cap uploads per reader per hour.
+
+    Keyed on the account rather than the address, because uploads cost disk
+    rather than CPU and one reader behind one address is the thing worth
+    stopping. The limiter's own window is a minute, which is the wrong shape for
+    this, so the hourly count is kept separately and the same shared table backs
+    it.
+    """
+
+    from sqlalchemy import text
+
+    from .database import engine as app_engine
+
+    window = int(time.time() // UPLOAD_RATE_WINDOW_SECONDS) * UPLOAD_RATE_WINDOW_SECONDS
+    with app_engine.begin() as connection:
+        count = connection.execute(
+            text(
+                """
+                INSERT INTO rate_limits (scope, client_key, window_start, count)
+                VALUES ('upload', :key, :window, 1)
+                ON CONFLICT (scope, client_key, window_start)
+                DO UPDATE SET count = count + 1
+                RETURNING count
+                """
+            ),
+            {"key": f"user:{user_id}", "window": window},
+        ).scalar_one()
+    if count > UPLOAD_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail="That is a lot of photos for one hour. Try again shortly.",
+            headers={"Retry-After": str(UPLOAD_RATE_WINDOW_SECONDS)},
+        )
+
+
+def _validated_image_url(value: str | None) -> str | None:
+    """Accept only a path this service actually issued.
+
+    The client can send any string here, so a URL is checked against what the
+    upload route produces rather than trusted. Anything else -- an absolute URL
+    to another host, a `data:` URI, a path to something else on this origin --
+    is refused. A dish photo pointing at somebody else's server is a tracking
+    pixel that every reader of the menu loads without meaning to.
+    """
+
+    if value is None or not value.strip():
+        return None
+    candidate = value.strip()
+    if not candidate.startswith("/uploads/"):
+        raise HTTPException(
+            status_code=422,
+            detail="image_url must be a path returned by the upload endpoint.",
+        )
+    if uploads.load(candidate.removeprefix("/uploads/")) is None:
+        raise HTTPException(
+            status_code=422, detail="That image was not found. Upload it first."
+        )
+    return candidate
+
+
+# ---------- Photo uploads ----------
+
+
+@app.post("/uploads", response_model=schemas.UploadOut, status_code=201)
+async def upload_image(
+    request: Request,
+    current_user: CurrentUser,
+) -> schemas.UploadOut:
+    """Accept one image and return the path it is served from.
+
+    Separate from dish and review submission on purpose: the client uploads once,
+    gets a path, and sends that path with the dish or the review. That means a
+    photo can be attached to either without a second upload, and a rejected
+    image fails before the reader has written anything.
+    """
+
+    # Rate limited per reader, not per address: uploads are the one endpoint
+    # where a signed-in account is a better key than an IP, and the cost is
+    # disk.
+    _limit_upload(current_user.id, request)
+
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > uploads.MAX_UPLOAD_BYTES:
+            # Stop reading rather than buffering the rest: the cap is there to
+            # bound memory, and a request that ignores it would defeat that by
+            # arriving whole.
+            raise HTTPException(
+                status_code=413,
+                detail=f"That image is over {uploads.MAX_UPLOAD_BYTES // 1024} KB.",
+            )
+
+    try:
+        stored = uploads.store(bytes(body))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return schemas.UploadOut(
+        url=stored.url, content_type=stored.content_type, size=stored.size
+    )
+
+
+@app.get("/uploads/{name}")
+def serve_image(name: str) -> FileResponse:
+    """Serve a stored upload.
+
+    Public, because a dish photograph is public information on a public menu.
+    The `nosniff` header matters more than usual here: it is what stops a
+    browser treating a file whose bytes are not actually the declared type as
+    something executable.
+    """
+
+    stored = uploads.load(name)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="No such image")
+    return FileResponse(
+        stored.path,
+        media_type=stored.content_type,
+        headers={
+            # Content-addressed names never change meaning, so this is safe to
+            # cache hard. The `immutable` here is unlike the SPA bundle in one
+            # respect: these files are written once and never rewritten.
+            "Cache-Control": "public, max-age=604800",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 def _apply_reader_tags(
     restaurant: models.Restaurant,
     good_for: list[str] | None,
@@ -1096,6 +1233,7 @@ def _serialize_dish(dish: models.Dish) -> schemas.DishOut:
         tags=dish.tags,
         avg_rating=dish.avg_rating,
         review_count=dish.review_count,
+        image_url=dish.image_url,
         added_by=schemas.DishContributor(
             id=contributor.id,
             name=contributor.name,
@@ -1129,7 +1267,10 @@ def create_dish(
     dish = models.Dish(
         restaurant_id=restaurant_id,
         added_by_user_id=current_user.id,
-        **dish_in.model_dump(),
+        image_url=_validated_image_url(dish_in.image_url),
+        # `image_url` is handled above because it has to be validated against a
+        # real file first, so it must not also arrive through the dump.
+        **dish_in.model_dump(exclude={"image_url"}),
     )
     db.add(dish)
     try:
@@ -1319,6 +1460,7 @@ def create_review(
         text=review_in.text,
         client_request_id=request_id,
         verification_tier=verification_tier,
+        image_url=_validated_image_url(review_in.image_url),
     )
     db.add(review)
     try:

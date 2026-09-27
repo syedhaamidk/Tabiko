@@ -220,6 +220,9 @@ class RestaurantPointOut(BaseModel):
 class DishCreate(BaseModel):
     name: Annotated[NonBlankString, Field(max_length=255)]
     tags: Annotated[NonBlankString, Field(max_length=255)] | None = None
+    # Set from a completed upload. Only paths this service issued are accepted;
+    # see `app.main._validated_image_url`.
+    image_url: Annotated[str, Field(max_length=500)] | None = None
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -252,6 +255,14 @@ class DishBulkCreate(BaseModel):
     """
 
     text: Annotated[str, StringConstraints(min_length=1, max_length=20000)]
+
+
+class UploadOut(BaseModel):
+    """A stored image, addressed by the path it is served from."""
+
+    url: str
+    content_type: str
+    size: int
 
 
 class DishContributor(BaseModel):
@@ -287,6 +298,7 @@ class DishOut(BaseModel):
     tags: str | None = None
     avg_rating: float
     review_count: int
+    image_url: str | None = None
     added_by: DishContributor | None = None
 
 
@@ -314,6 +326,10 @@ class ReviewCreate(BaseModel):
     # data while being unreachable.
     good_for: list[str] | None = None
     dietary: list[str] | None = None
+    # A path returned by a completed upload, not an arbitrary URL. A client that
+    # could set this to anything would be able to make the app render an image
+    # from anywhere, which is a tracking pixel at best.
+    image_url: Annotated[str, Field(max_length=500)] | None = None
 
     @field_validator("good_for")
     @classmethod
@@ -364,6 +380,7 @@ class ReviewOut(BaseModel):
     fraud_flag: bool
     fraud_reason: str | None = None
     created_at: datetime
+    image_url: str | None = None
     reviewer: ReviewerInfo
 
 
