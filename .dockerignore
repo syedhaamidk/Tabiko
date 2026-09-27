@@ -46,7 +46,7 @@ frontend/dist/
 # died on boot. It appeared to work only because a pre-existing database already
 # carried `alembic_version` at head.
 #
-# `backend/data/` is deliberately kept: 348 KB of gzipped OSM payload plus a few
+# `backend/data/` is deliberately kept: 349 kB of gzipped OSM payload plus a few
 # hundred bytes of provenance, and it is the source the city is built from.
 #
 # The `**/` is required and is easy to get wrong. Docker matches each pattern

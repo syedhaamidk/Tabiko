@@ -1,9 +1,9 @@
 """Credit the dishes people contribute.
 
-`dishes.user_id` records who typed a dish in, so the person who filled in a menu
-can be credited for it. `ON DELETE SET NULL` rather than CASCADE: deleting an
-account should not silently delete a menu that other readers now rely on, and
-the dish simply becomes unattributed.
+`dishes.added_by_user_id` records who typed a dish in, so the person who filled
+in a menu can be credited for it. `ON DELETE SET NULL` rather than CASCADE:
+deleting an account should not silently delete a menu that other readers now
+rely on, and the dish simply becomes unattributed.
 
 The table is recreated through batch_alter_table because SQLite cannot add a
 column with a foreign key to a table it is adding one to.
