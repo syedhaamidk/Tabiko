@@ -82,7 +82,19 @@ function refreshSession() {
       setTokens(body);
       return true;
     })
-    .catch(() => false)
+    .catch(() => {
+      // A refresh that never reached the server at all -- offline, DNS failure,
+      // the connection dropped mid-tab. The original 401 is still what the
+      // caller sees, so the reader is unaffected, but the token in storage is
+      // not known to be dead and may well be valid.
+      //
+      // Clearing it here would be wrong: a train tunnel would sign the reader
+      // out, and the token would have worked on the other side. What matters is
+      // that a later request can try again, which it can, because `finally` has
+      // already cleared the in-flight promise. So this returns false and
+      // changes nothing.
+      return false;
+    })
     .finally(() => {
       refreshInFlight = null;
     });
@@ -264,6 +276,46 @@ export function saveFavorite(restaurantId) {
 export function removeFavorite(restaurantId) {
   return authFetch(`${BASE_URL}/favorites/${restaurantId}`, {
     method: "DELETE",
+  }).then(handleResponse);
+}
+
+// ---------- Photo uploads ----------
+
+/**
+ * Upload one image and return the path the server will serve it from.
+ *
+ * Deliberately a separate call from submitting a dish or a review: the reader
+ * picks a photo, it uploads immediately, and the review or dish is sent later
+ * with the resulting path. That means a rejected image fails while the reader is
+ * still looking at the picker, rather than after they have written the review.
+ *
+ * **The `Content-Type` header is not set, and that is not an oversight.** A
+ * `multipart/form-data` body carries its boundary in the header, and only the
+ * browser can generate that boundary. Setting the header by hand produces a
+ * request the server cannot parse, with an error that reads like a server fault
+ * rather than a client mistake. `fetch` sets it correctly when it is left alone.
+ *
+ * The file is sent as the raw request body rather than wrapped in `FormData`.
+ * The server reads the bytes and sniffs them, so a field name and a filename add
+ * nothing -- and a raw body is re-sendable, which matters because an expired
+ * token makes `authFetch` send this request twice.
+ */
+export function uploadImage(file) {
+  // A cheap guard on the declared type, before the bytes are sent. It is only
+  // ever a shortcut: a reader who picked a .txt gets told while they can still
+  // change the photo, rather than after a round trip. Anything the browser
+  // claims might be an image goes to the server regardless, because the declared
+  // type is not the file -- a renamed .txt says `image/png`, and the server's
+  // magic-number check is the one that actually decides.
+  if (file?.type && !file.type.startsWith("image/")) {
+    return Promise.reject(
+      new Error(`${file.name || "That file"} is not an image. Pick a photo.`),
+    );
+  }
+
+  return authFetch(`${BASE_URL}/uploads`, {
+    method: "POST",
+    body: file,
   }).then(handleResponse);
 }
 
