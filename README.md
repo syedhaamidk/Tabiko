@@ -1,44 +1,51 @@
 <div align="center">
 
-# TABIKO
-
-### Big flavor. Zero boring bites.
-
-**A Bengaluru food radar — 7,683 real places, zero tile servers, zero pay-to-play.**
+![TABIKO](https://img.shields.io/badge/TABIKO-big_flavor-FF2E88?style=for-the-badge)
+![ZERO BORING BITES](https://img.shields.io/badge/ZERO-boring_bites-2A0E1E?style=for-the-badge)
 
 [![CI](https://github.com/syedhaamidk/Tabiko/actions/workflows/ci.yml/badge.svg)](https://github.com/syedhaamidk/Tabiko/actions/workflows/ci.yml)
-[![Backend](https://img.shields.io/badge/backend-FastAPI_0.136-009688?style=flat-square&logo=fastapi)](backend/)
-[![Frontend](https://img.shields.io/badge/frontend-React_18_+_Vite-61DAFB?style=flat-square&logo=react)](frontend/)
-[![Database](https://img.shields.io/badge/database-SQLite_WAL-003B57?style=flat-square&logo=sqlite)](backend/app/database.py)
-[![Docker](https://img.shields.io/badge/deploy-docker_compose-2496ED?style=flat-square&logo=docker)](docker-compose.yml)
-[![Tests](https://img.shields.io/badge/tests-615_passing-brightgreen?style=flat-square)](#verification)
-[![OSM](https://img.shields.io/badge/data-©_OpenStreetMap_contributors-7EBC6F?style=flat-square)](https://www.openstreetmap.org/copyright)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Backend](https://img.shields.io/badge/backend-FastAPI_0.136-2D5BFF?style=for-the-badge&logo=fastapi&logoColor=white)](backend/)
+[![Frontend](https://img.shields.io/badge/frontend-React_18_+_Vite-7B2CFF?style=for-the-badge&logo=react&logoColor=white)](frontend/)
+[![Database](https://img.shields.io/badge/database-SQLite_WAL-FF6B35?style=for-the-badge&logo=sqlite&logoColor=white)](backend/app/database.py)
+[![Deploy](https://img.shields.io/badge/deploy-docker_compose-2A0E1E?style=for-the-badge&logo=docker&logoColor=white)](docker-compose.yml)
+[![Tests](https://img.shields.io/badge/tests-615_passing-00D084?style=for-the-badge)](#-verification)
+[![OSM](https://img.shields.io/badge/data-©_OpenStreetMap_contributors-7EBC6F?style=for-the-badge)](https://www.openstreetmap.org/copyright)
+[![License](https://img.shields.io/badge/license-MIT-00D084?style=for-the-badge)](LICENSE)
 
-*Real cravings · Cult dishes · Local intel · A map that changes mood with every cuisine*
+<sub><b>BIG FLAVOR. ZERO BORING BITES.</b></sub>
 
-[Quick start](#-quick-start) · [Features](#-what-it-does) · [Architecture](#-architecture) · [API](#-api-surface) · [Verification](#-verification) · [Deployment](#-deployment)
+# Follow the flavor. Find the funk.
+
+Tabiko is your neon-lit neighborhood table: real cravings, cult dishes, local intel, and a map that changes mood with every cuisine.
+
+**7,683** Bengaluru places &nbsp;·&nbsp; **17** cuisines mapped &nbsp;·&nbsp; **0** pay-to-play spots
+
+**✦ TABIKO ✦ SPICY ✦ LOCAL ✦ MESSY ✦ COFFEE ✦ FRESH ✦ COMFORT ✦ DATE NIGHT ✦ STREET FOOD ✦**
+
+[Quick start](#pick-your-view--quick-start) · [What it does](#fresh-from-the-table--what-it-does) · [The mood map](#the-mood-changes-with-every-cuisine) · [Architecture](#under-the-counter--architecture) · [API](#api-surface) · [Verification](#receipts--verification) · [Deployment](#one-command--deployment)
 
 </div>
 
 ---
 
-## ✨ What it does
+<sub><b>FRESH FROM THE TABLE</b></sub>
+## What it does
 
 | | |
 |---|---|
-| 🗺️ **Self-drawn map** | No tile provider, no API key, no per-request cost. Vendored OSM geometry rendered as styled vectors on a blank Leaflet canvas — Sunset and After-dark themes recolor it live. |
-| 🔍 **Craving radar** | TF-IDF ranking over dish + review text. Reports `unmatched_terms` instead of confidently ranking irrelevant places. |
-| 📍 **Proximity that tells the truth** | `origin_lat/lon` + `radius_m` + `distance` sort, with `distance_m` on every row and `X-Total-Count` for honest counts. A radius without an origin is a `422`, never a silent 200. |
-| 👥 **Friends, not followers** | Follow readers, filter any place to “people I follow”, chronological Friends feed. Immediate, idempotent, no requests, no algorithm. |
-| 📸 **Photos** | Dish + review uploads with magic-byte validation, content-addressed storage, served via the API. |
-| 🍽️ **Menus by the people who ate there** | Empty state is an invitation. Paste a whole menu in one request — duplicates reported, not rejected. Every dish credits its contributor. |
-| 📴 **Offline-first PWA** | Installable, precached shell + basemap. `/api` is never cached. |
-| 🧭 **In-app directions** | Walkable routing graph built from the same vendored streets the map draws. Rajajinagar only — elsewhere it says so instead of faking it. |
+| **Self-drawn map** | No tile provider, no API key, no per-request cost. Vendored OSM geometry rendered as styled vectors on a blank Leaflet canvas — Sunset and After-dark themes recolor it live. |
+| **Craving radar** | TF-IDF ranking over dish + review text. Reports `unmatched_terms` instead of confidently ranking irrelevant places. |
+| **Proximity that tells the truth** | `origin_lat/lon` + `radius_m` + `distance` sort, with `distance_m` on every row and `X-Total-Count` for honest counts. A radius without an origin is a `422`, never a silent 200. |
+| **Friends, not followers** | Follow readers, filter any place to “people I follow”, chronological Friends feed. Immediate, idempotent, no requests, no algorithm. |
+| **Photos** | Dish + review uploads with magic-byte validation, content-addressed storage, served via the API. |
+| **Menus by the people who ate there** | The empty state is an invitation. Paste a whole menu in one request — duplicates reported, not rejected. Every dish credits its contributor. |
+| **Offline-first PWA** | Installable, precached shell + basemap. `/api` is never cached. |
+| **In-app directions** | Walkable routing graph built from the same vendored streets the map draws. Rajajinagar only — elsewhere it says so instead of faking it. |
 
 ---
 
-## 🚀 Quick start
+<sub><b>PICK YOUR VIEW</b></sub>
+## Quick start
 
 ### One command (recommended)
 
@@ -75,7 +82,26 @@ npm run dev
 
 ---
 
-## 🏗️ Architecture
+<sub><b>THE MOOD CHANGES WITH EVERY CUISINE</b></sub>
+## The mood map
+
+Every cuisine gets its own palette + display face, set per place through `/restaurants/{id}/theme`. Same mechanism the app uses — this legend is the token file talking:
+
+![SOUTH INDIAN · Rozha One](https://img.shields.io/badge/SOUTH_INDIAN-Rozha_One-B23A1E?style=for-the-badge)
+![NORTH INDIAN · Playfair Display](https://img.shields.io/badge/NORTH_INDIAN-Playfair_Display-8C1D18?style=for-the-badge)
+![CHINESE · Noto Serif SC](https://img.shields.io/badge/CHINESE-Noto_Serif_SC-C0392B?style=for-the-badge)
+![CAFE BAKERY · Baloo 2](https://img.shields.io/badge/CAFE_BAKERY-Baloo_2-A9746E?style=for-the-badge)
+![STREET FOOD · Bungee](https://img.shields.io/badge/STREET_FOOD-Bungee-FF5733?style=for-the-badge)
+![CONTINENTAL ITALIAN · Cormorant Garamond](https://img.shields.io/badge/CONTINENTAL_ITALIAN-Cormorant_Garamond-2E4053?style=for-the-badge)
+![FINE DINE · Bodoni Moda](https://img.shields.io/badge/FINE_DINE-Bodoni_Moda-D4AF37?style=for-the-badge)
+![MULTI CUISINE · Bungee](https://img.shields.io/badge/MULTI_CUISINE-Bungee-FF2E88?style=for-the-badge)
+
+Every display surface reads its font from the theme tokens (`--font-display` / `--font-body`) — never a hardcoded string — so a future font-pair change moves all 29 spots at once. Covered by `frontend/src/styles/fontTokens.test.js`, which resolves the real stylesheet against the real token file.
+
+---
+
+<sub><b>UNDER THE COUNTER</b></sub>
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -111,7 +137,8 @@ flowchart LR
 
 ---
 
-## 🛠️ Tech stack
+<sub><b>TABLE STAKES</b></sub>
+## Tech stack
 
 | Layer | Choice |
 |---|---|
@@ -122,9 +149,13 @@ flowchart LR
 
 ---
 
-## 🔌 API surface
+<sub><b>THE FULL MENU</b></sub>
+## API surface
 
 30 endpoints under `/api` in production (prefix stripped in dev so both agree).
+
+<details>
+<summary><b>Core, auth, menus & reviews, saved & search, moderation, uploads</b></summary>
 
 | Area | Endpoints |
 |---|---|
@@ -137,9 +168,15 @@ flowchart LR
 
 Retrying a review with the same `client_request_id` returns `409` before aggregates change. `following_only=true` while logged out is `401` — “you follow nobody” and “you’re not signed in” are different answers.
 
+</details>
+
 ---
 
-## ⚙️ Configuration
+<sub><b>FINE PRINT, READ IT</b></sub>
+## Configuration
+
+<details>
+<summary><b>Environment variables</b></summary>
 
 ```bash
 TABIKO_DATABASE_URL=sqlite:////data/tabiko.db   # the line that matters — volume-mounted, or container replacement eats reader data
@@ -157,9 +194,12 @@ TABIKO_FEED_LIMIT=50
 
 Full list in `backend/.env.example` (`backend/.env` is gitignored). Never put secrets in `VITE_*` variables — Vite inlines them into the client bundle.
 
+</details>
+
 ---
 
-## ✅ Verification
+<sub><b>RECEIPTS</b></sub>
+## Verification
 
 | Suite | Count |
 |---|---|
@@ -182,7 +222,8 @@ CI (`.github/workflows/ci.yml`) runs **backend · frontend · docker · snapshot
 
 ---
 
-## 🗺️ Data & coverage
+<sub><b>WHAT'S ACTUALLY ON THE TABLE</b></sub>
+## Data & coverage
 
 - **7,683 places** across greater Bengaluru (`12.75,77.45,13.15,77.80`), all with address + cuisine label.
 - **40.6%** from a real OSM `cuisine` tag · **59.4%** derived from the venue tag (`raw_cuisine_tag` left empty so derivation is never mistaken for source).
@@ -192,7 +233,11 @@ CI (`.github/workflows/ci.yml`) runs **backend · frontend · docker · snapshot
 
 ---
 
-## 🧱 Project layout
+<sub><b>HOW THE KITCHEN IS LAID OUT</b></sub>
+## Project layout
+
+<details>
+<summary><b>Directory map</b></summary>
 
 ```text
 tabiko/
@@ -214,9 +259,12 @@ tabiko/
 
 `backend-2/` is an archived feature draft — documented, superseded, do not run as a service.
 
+</details>
+
 ---
 
-## ⚠️ Known limits (stated plainly)
+<sub><b>NO BORING BITES — INCLUDING THE TRUTH</b></sub>
+## Known limits (stated plainly)
 
 - **Menus are seed-only.** OSM carries no menu data; the contribution flow exists and waits on real readers.
 - **9 of 11 occasion filters match nothing** (`date`, `family`, `work`… need reader-supplied tags).
@@ -227,7 +275,8 @@ tabiko/
 
 ---
 
-## 🤝 Contributing
+<sub><b>HEY, FLAVOR CHASER</b></sub>
+## Contributing
 
 ```bash
 git clone https://github.com/syedhaamidk/Tabiko.git
@@ -239,7 +288,7 @@ Report bugs with reproduction steps. Don’t invent data — no fake counts, cui
 
 ---
 
-## 📄 License
+## License
 
 MIT — see [LICENSE](LICENSE).
 
@@ -249,7 +298,9 @@ Place data © OpenStreetMap contributors ([ODbL](https://www.openstreetmap.org/c
 
 <div align="center">
 
-**Cooked up with masala & main-character energy**
+**✦ GOOD FOOD · NO BORING BITES ✦**
+
+*Cooked up with masala & main-character energy*
 
 Place intel © OpenStreetMap contributors · Built with FastAPI, React, and Leaflet-as-a-canvas
 
