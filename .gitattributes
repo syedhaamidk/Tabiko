@@ -1,0 +1,40 @@
+# Line endings, pinned deliberately.
+#
+# `core.autocrlf` is true by default on Windows, which rewrites LF to CRLF on
+# checkout. That is fine for a .py file and fatal for a shell script: a CRLF
+# shebang makes the kernel look for an interpreter named `/bin/sh\r`, so
+# `docker/entrypoint.sh` dies with "no such file or directory" before preflight
+# runs and the container never starts. Nothing in the build would say why.
+#
+# This file has to be in the repository, because the machine that checks it out
+# is not necessarily the machine that built the image.
+
+# Normalise to LF in the repository, and check out LF in the working tree.
+* text=auto eol=lf
+
+# The entrypoint must be LF or the image cannot boot.
+docker/entrypoint.sh text eol=lf
+
+# Windows scripts still need CRLF to run at all.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Not text. Marked so git does not try to normalise them, which corrupts them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.pdf binary
+
+# Vendored map payloads are large generated JSON. Keep them text so they diff,
+# but never let a checkout rewrap them.
+frontend/public/data/*.json text eol=lf
+package-lock.json text eol=lf
