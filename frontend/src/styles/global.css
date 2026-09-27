@@ -1865,6 +1865,92 @@ textarea:focus-visible {
   font-style: italic;
 }
 
+/*
+ * Reader-supplied occasion and diet tags.
+ *
+ * Deliberately collapsed by default. Eleven occasion checkboxes plus seven diet
+ * ones would be a wall in a form whose real job is rating and a sentence, and
+ * readers skip walls. Open on demand, show a count once something is picked, and
+ * say why the question is being asked at all -- the honest reason is that
+ * nobody records this in OpenStreetMap and the filters are empty without it.
+ */
+.tag-prompt {
+  border-top: 1px dashed rgba(58, 24, 16, 0.14);
+}
+
+.tag-prompt__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.1rem;
+  border: 0;
+  background: none;
+  color: color-mix(in srgb, var(--color-text) 72%, transparent);
+  font: inherit;
+  font-size: 0.7rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-prompt__toggle:hover {
+  color: var(--color-text);
+}
+
+.tag-prompt__toggle em {
+  font-style: normal;
+  color: var(--color-primary);
+}
+
+.tag-prompt__body {
+  padding: 0 0.1rem 0.6rem;
+}
+
+.tag-prompt__hint {
+  margin: 0 0 0.5rem;
+  color: color-mix(in srgb, var(--color-text) 52%, transparent);
+  font-size: 0.64rem;
+  line-height: 1.45;
+}
+
+.tag-prompt__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.tag-prompt__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, transparent);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--color-text) 78%, transparent);
+  font-size: 0.66rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tag-prompt__option:has(input:checked) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+
+.tag-prompt__option:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.tag-prompt__option input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
 .bulk-toggle {
   display: flex;
   justify-content: center;

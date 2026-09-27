@@ -22,3 +22,10 @@ frontend/.env.local
 *.pem
 *.key
 id_rsa*
+
+# Scratch files from driving the real app during verification. These held a
+# live account password and a signed JWT, and were staged by accident once.
+*_token.txt
+e2e_*.txt
+probe_*.txt
+*.scratch

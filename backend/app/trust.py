@@ -7,6 +7,7 @@ enough review volume for clusters to be meaningful.
 """
 
 import math
+import re
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
@@ -16,22 +17,57 @@ from .models import utc_now
 
 CHECKIN_RADIUS_METERS = 150
 REGULAR_VISIT_THRESHOLD = 3
+
+# Hygiene vocabulary, matched on whole words only.
+#
+# Every word here has to be about the *premises*, not the food. "Fresh" was in
+# the positive list until this was exercised against real review text, where it
+# turned out to be a false positive on almost every sentence: "the dosa was
+# fresh off the tawa", "fresh filter coffee", "freshly ground masala" all scored
+# a restaurant 5/5 on hygiene while saying nothing whatsoever about its kitchen.
+# In a food review "fresh" describes the food roughly ten times for every time it
+# describes the room, so it cannot be a hygiene signal.
+#
+# Word boundaries are equally load-bearing. Substring matching meant "roach"
+# fired on "approach" and "encroach", "stale" fired on "stainless" and "install",
+# "clean" fired on "unclean", and "fresh" fired on "refresh". A review saying
+# "the staff took a practical approach" scored 0.0 -- a false negative and a
+# false positive in the same sentence.
 POSITIVE_HYGIENE_WORDS = (
     "clean",
     "hygienic",
+    "hygiene",
     "spotless",
-    "fresh",
     "tidy",
+    "sanitary",
+    "immaculate",
+    "immaculately",
 )
+
 NEGATIVE_HYGIENE_WORDS = (
     "dirty",
     "unhygienic",
-    "cockroach",
-    "stale",
-    "smell",
-    "insect",
     "filthy",
+    "grimy",
+    "cockroach",
     "roach",
+    "roach(es)",
+    "stale",
+    "smelly",
+    "insect",
+    "insects",
+    "flies",
+    "greasy",
+    "sticky",
+)
+
+_POSITIVE_PATTERN = re.compile(
+    r"\b(?:" + "|".join(re.escape(word) for word in POSITIVE_HYGIENE_WORDS) + r")\b",
+    re.IGNORECASE,
+)
+_NEGATIVE_PATTERN = re.compile(
+    r"\b(?:" + "|".join(re.escape(word) for word in NEGATIVE_HYGIENE_WORDS) + r")\b",
+    re.IGNORECASE,
 )
 
 
@@ -111,11 +147,19 @@ def resolve_verification_tier(
 
 
 def score_hygiene_mention(text: str | None) -> float | None:
+    """Score how a review describes the premises' cleanliness.
+
+    Returns None when the review says nothing about hygiene at all, which is the
+    common case and must not be treated as neutral evidence. A restaurant's score
+    is a mean over only the reviews that actually mentioned it, so one vague
+    "nice place, tasty food" cannot drag a place down and one enthusiastic
+    remark cannot carry it up.
+    """
+
     if not text:
         return None
-    lowered = text.lower()
-    positive_hits = sum(word in lowered for word in POSITIVE_HYGIENE_WORDS)
-    negative_hits = sum(word in lowered for word in NEGATIVE_HYGIENE_WORDS)
+    positive_hits = len(_POSITIVE_PATTERN.findall(text))
+    negative_hits = len(_NEGATIVE_PATTERN.findall(text))
     if positive_hits == 0 and negative_hits == 0:
         return None
     return (positive_hits - negative_hits) / (positive_hits + negative_hits)

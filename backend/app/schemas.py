@@ -49,6 +49,30 @@ GOOD_FOR_TAGS: tuple[str, ...] = (
     "live_music",
 )
 
+
+def _known_tags(
+    value: list[str] | None, allowed: tuple[str, ...], field: str
+) -> list[str] | None:
+    """Validate reader-supplied tags against a vocabulary.
+
+    Unknown values are rejected rather than quietly stored. A tag outside the
+    vocabulary is invisible to every filter and to the count that reports how
+    many places match one, so storing it would look like coverage while being
+    permanently unreachable. Duplicates are collapsed and order is preserved so
+    the stored string is stable.
+    """
+
+    if value is None:
+        return None
+    unknown = [tag for tag in value if tag not in allowed]
+    if unknown:
+        raise ValueError(
+            f"unknown {field} value(s): {', '.join(sorted(set(unknown)))}. "
+            f"Allowed: {', '.join(allowed)}"
+        )
+    return list(dict.fromkeys(value))
+
+
 # Access needs are stored per place but had no way to be asked for, even though
 # over a thousand places carry them. Promoted to a filter group so the data is
 # reachable rather than merely collected.
@@ -197,6 +221,28 @@ class DishCreate(BaseModel):
     name: Annotated[NonBlankString, Field(max_length=255)]
     tags: Annotated[NonBlankString, Field(max_length=255)] | None = None
 
+    @field_validator("tags", mode="before")
+    @classmethod
+    def blank_tags_mean_no_tags(cls, value: object) -> object:
+        """Treat an empty or whitespace-only `tags` as absent.
+
+        An HTML form with an untouched text box submits `""`, not `null`, and
+        `NonBlankString` rejects the empty string even though the field is
+        declared optional. That made the single "Add dish" button 422 on every
+        submission where the reader left the tags box alone -- which is nearly
+        all of them, and the whole reason the bulk paste exists.
+
+        The unit tests never caught it because the test helper passes
+        `tags=None`, so it posts `null`. Only driving the real form found it.
+
+        Applied to `tags` only. A blank dish *name* is a genuine mistake and is
+        still rejected, as is a blank `cuisine_specialty` or `fraud_reason`.
+        """
+
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
 
 class DishBulkCreate(BaseModel):
     """A pasted menu.
@@ -253,6 +299,31 @@ class ReviewCreate(BaseModel):
     claimed_verification_tier: VerificationTier = VerificationTier.unverified
     user_lat: Latitude | None = None
     user_lon: Longitude | None = None
+
+    # Occasion and diet tags supplied by the reader.
+    #
+    # These are the two emptiest dimensions in the whole app -- `good_for` sits
+    # at 3.7% of places and dietary flags at 8.7% -- and no amount of re-ingestion
+    # will fill them, because OpenStreetMap does not record whether somewhere is
+    # good for a date or serves vegan food. The only people who know are the ones
+    # who were just there, and they are already typing a review.
+    #
+    # Both default to None, so an existing client that sends neither is
+    # unaffected. Unknown values are rejected rather than stored, because a tag
+    # outside the vocabulary is invisible to every filter and would look like
+    # data while being unreachable.
+    good_for: list[str] | None = None
+    dietary: list[str] | None = None
+
+    @field_validator("good_for")
+    @classmethod
+    def good_for_must_be_known(cls, value: list[str] | None) -> list[str] | None:
+        return _known_tags(value, GOOD_FOR_TAGS, "good_for")
+
+    @field_validator("dietary")
+    @classmethod
+    def dietary_must_be_known(cls, value: list[str] | None) -> list[str] | None:
+        return _known_tags(value, DIETARY_FLAGS, "dietary")
 
     @model_validator(mode="after")
     def coordinates_must_be_paired(self) -> ReviewCreate:

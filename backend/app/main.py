@@ -1044,6 +1044,41 @@ def list_dishes(restaurant_id: int, db: DbSession) -> list[schemas.DishOut]:
     return [_serialize_dish(dish) for dish in rows]
 
 
+def _merge_tags(current: str | None, incoming: list[str] | None) -> str | None:
+    """Union two comma-separated tag strings, preserving order and dropping dupes."""
+
+    if not incoming:
+        return current
+    existing = [part.strip() for part in (current or "").split(",") if part.strip()]
+    merged = list(dict.fromkeys([*existing, *incoming]))
+    return ", ".join(merged) or None
+
+
+def _apply_reader_tags(
+    restaurant: models.Restaurant,
+    good_for: list[str] | None,
+    dietary: list[str] | None,
+) -> None:
+    """Let a review fill in the occasion and diet tags OSM does not carry.
+
+    `good_for` sits at 3.7% of places and dietary flags at 8.7%, and re-ingesting
+    cannot move either, because nobody tags a restaurant as good for a date in
+    OpenStreetMap. The people who know are the ones who just ate there, and they
+    are already submitting a review.
+
+    Merged, never replaced. A reader confirming "this is fine for families" must
+    not erase an `outdoor_seating=yes` the importer recorded, and two readers
+    disagreeing should accumulate rather than have the last write win. That also
+    means a wrong tag cannot be removed from here, only by someone who notices it
+    and edits the place.
+    """
+
+    if good_for:
+        restaurant.good_for = _merge_tags(restaurant.good_for, good_for)
+    if dietary:
+        restaurant.dietary_flags = _merge_tags(restaurant.dietary_flags, dietary)
+
+
 def _serialize_dish(dish: models.Dish) -> schemas.DishOut:
     """Shape a dish, crediting whoever added it.
 
@@ -1306,6 +1341,8 @@ def create_review(
             )
             dish.avg_rating = float(average or 0.0)
             dish.review_count = review_count
+
+        _apply_reader_tags(restaurant, review_in.good_for, review_in.dietary)
 
         db.commit()
     except IntegrityError as exc:

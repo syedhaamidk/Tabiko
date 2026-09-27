@@ -190,6 +190,63 @@ def test_bulk_entry_needs_a_real_place(client):
     assert _bulk(client, 999999, "Masala Dosa").status_code == 404
 
 
+def test_a_dish_with_an_empty_tags_string_is_accepted(client, place):
+    """The regression that made the real "Add dish" button useless.
+
+    An untouched text box submits `""`, not `null`, and the field is declared
+    optional -- so the request was rejected on nearly every real submission,
+    since readers usually leave the tags box alone. The tests all passed
+    `tags=None`, which posts `null`, so only driving the actual form found it.
+    """
+
+    response = client.post(
+        f"/restaurants/{place}/dishes",
+        json={"name": "Filter Coffee", "tags": ""},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["tags"] is None
+
+
+def test_a_whitespace_only_tags_string_is_accepted(client, place):
+    response = client.post(
+        f"/restaurants/{place}/dishes",
+        json={"name": "Idli", "tags": "   "},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["tags"] is None
+
+
+def test_a_blank_dish_name_is_still_rejected(client, place):
+    """The leniency is for `tags` only. A dish with no name is a real mistake."""
+
+    for bad in ("", "   "):
+        response = client.post(
+            f"/restaurants/{place}/dishes",
+            json={"name": bad, "tags": "spicy"},
+        )
+        assert response.status_code == 422, f"accepted a blank name: {bad!r}"
+
+
+def test_a_blank_profile_specialty_is_still_rejected(client):
+    """Same validator shape elsewhere must not have been loosened."""
+
+    response = client.patch("/auth/me", json={"cuisine_specialty": ""})
+
+    assert response.status_code == 422
+
+
+def test_real_tags_still_survive(client, place):
+    response = client.post(
+        f"/restaurants/{place}/dishes",
+        json={"name": "Masala Dosa", "tags": "veg, breakfast"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["tags"] == "veg, breakfast"
+
+
 # ---------- contributor credit ----------
 
 

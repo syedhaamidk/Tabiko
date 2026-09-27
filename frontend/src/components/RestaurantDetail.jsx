@@ -49,6 +49,80 @@ function splitTags(value) {
     .filter(Boolean);
 }
 
+// Vocabulary mirrors the backend's GOOD_FOR_TAGS and DIETARY_FLAGS. The backend
+// is the authority and rejects anything outside it, but sending a round trip to
+// discover the list on every form render would be absurd for eleven strings.
+const OCCASION_OPTIONS = [
+  ["date", "Date night"],
+  ["group", "Group"],
+  ["family", "Family"],
+  ["solo", "Solo"],
+  ["work", "Work friendly"],
+  ["late_night", "Late night"],
+  ["outdoor", "Outdoor"],
+  ["pet_friendly", "Pet friendly"],
+  ["budget", "Budget"],
+  ["quick_bite", "Quick bite"],
+  ["live_music", "Live music"],
+];
+
+const DIET_OPTIONS = [
+  ["veg", "Vegetarian"],
+  ["non_veg", "Non-vegetarian"],
+  ["vegan", "Vegan"],
+  ["jain", "Jain"],
+  ["halal", "Halal"],
+  ["egg", "Has eggs"],
+  ["gluten_free", "Gluten free"],
+];
+
+/**
+ * A group of checkboxes that only shows its body once it is opened.
+ *
+ * `good_for` matches 3.7% of places and dietary flags 8.7%, and re-ingesting
+ * cannot move either, because OpenStreetMap does not record whether somewhere
+ * is good for a date or serves Jain food. The people who know are the ones who
+ * just ate there and are already writing a review, so this asks them at the
+ * moment they have the answer -- and stays collapsed until they want it, so the
+ * form does not become a wall of eleven boxes nobody reads.
+ */
+function TagPrompt({ legend, hint, options, selected, onToggle }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`tag-prompt${open ? " tag-prompt--open" : ""}`}>
+      <button
+        type="button"
+        className="tag-prompt__toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>
+          {legend}
+          {selected.length > 0 && <em> · {selected.length} picked</em>}
+        </span>
+        <InterfaceIcon name={open ? "close" : "plus"} size={15} />
+      </button>
+      {open && (
+        <div className="tag-prompt__body">
+          <p className="tag-prompt__hint">{hint}</p>
+          <div className="tag-prompt__options">
+            {options.map(([value, label]) => (
+              <label key={value} className="tag-prompt__option">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(value)}
+                  onChange={() => onToggle(value)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReviewerBadges({ reviewer }) {
   return (
     <span className="reviewer-badges">
@@ -79,7 +153,7 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
   const [loadError, setLoadError] = useState(null);
   const [dishes, setDishes] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [draft, setDraft] = useState({ rating: 5, text: "" });
+  const [draft, setDraft] = useState({ rating: 5, text: "", goodFor: [], dietary: [] });
   const [draftRequestId, setDraftRequestId] = useState(() => crypto.randomUUID());
   const [dishDraft, setDishDraft] = useState({ name: "", tags: "" });
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -126,9 +200,13 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
         user_lat: position?.lat,
         user_lon: position?.lon,
         client_request_id: draftRequestId,
+        // Sent only when the reader actually picked something, so a review with
+        // no opinions about the venue leaves the place's tags untouched.
+        good_for: draft.goodFor.length ? draft.goodFor : null,
+        dietary: draft.dietary.length ? draft.dietary : null,
       });
       setReviews((existing) => [newReview, ...existing]);
-      setDraft({ rating: 5, text: "" });
+      setDraft({ rating: 5, text: "", goodFor: [], dietary: [] });
       setDraftRequestId(crypto.randomUUID());
       getRestaurant(restaurantId).then(setRestaurant).catch(() => {});
     } catch (error) {
@@ -507,6 +585,36 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
                 onChange={(event) => setDraft((draft) => ({ ...draft, text: event.target.value }))}
                 rows={4}
               />
+
+              <TagPrompt
+                legend="Good for"
+                hint="Nobody records this in OpenStreetMap, so your answer fills a filter that is otherwise empty."
+                options={OCCASION_OPTIONS}
+                selected={draft.goodFor}
+                onToggle={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    goodFor: current.goodFor.includes(value)
+                      ? current.goodFor.filter((tag) => tag !== value)
+                      : [...current.goodFor, value],
+                  }))
+                }
+              />
+              <TagPrompt
+                legend="Diet"
+                hint="Tick anything on the menu that applies. Filters for vegan, Jain and gluten-free are almost empty for the same reason."
+                options={DIET_OPTIONS}
+                selected={draft.dietary}
+                onToggle={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    dietary: current.dietary.includes(value)
+                      ? current.dietary.filter((tag) => tag !== value)
+                      : [...current.dietary, value],
+                  }))
+                }
+              />
+
               <div className="review-composer__footer">
                 <small><InterfaceIcon name="pin" size={14} /> Nearby check-ins earn a here-now badge.</small>
                 <button className="app-button app-button--primary" type="submit" disabled={submitting}>

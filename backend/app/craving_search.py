@@ -66,41 +66,153 @@ def _tokenize(value: str) -> list[str]:
     ]
 
 
-def _restaurant_text(restaurant: models.Restaurant) -> str:
-    parts = [
-        restaurant.name,
-        restaurant.cuisine_tags or "",
-        restaurant.good_for or "",
-        restaurant.accessibility_flags or "",
-        restaurant.type_tag.value.replace("_", " ") if restaurant.type_tag else "",
-    ]
-    parts.extend(dish.name for dish in restaurant.dishes)
-    parts.extend(dish.tags or "" for dish in restaurant.dishes)
-    parts.extend(
-        review.text
-        for review in restaurant.reviews
-        if review.text and not review.fraud_flag
-    )
-    return " ".join(part for part in parts if part)
+# Field weights for the searchable vector.
+#
+# The corpus used to be one flat bag of words per venue: name, cuisines, dish
+# names, dish tags and review text concatenated, each term counting exactly once.
+# Against a corpus of real dish text that ranked almost purely on the venue
+# NAME, because a name is one short field and a menu is not. "cold brew" returned
+# Cold Stone Creamery and Pizza Brew House -- venues with "brew" in their name
+# and no cold brew anywhere -- ahead of anywhere that actually lists it.
+# "butter chicken" returned a place called "C# chicken".
+#
+# What a reader is asking is "where can I eat this", so a dish on the menu is
+# the strongest evidence, a place being *named* after the thing is weak, and
+# everything else sits in between. Weights are applied as term-frequency
+# multipliers before normalisation, which keeps the single-vector cosine and
+# therefore the endpoint contract unchanged.
+FIELD_WEIGHTS: dict[str, float] = {
+    "dish_name": 4.0,
+    "dish_tags": 2.0,
+    "cuisine": 1.5,
+    "review": 1.5,
+    "name": 1.0,
+    "occasion": 0.5,
+    "accessibility": 0.5,
+    "venue_type": 0.5,
+}
 
 
-def _normalized_vector(tokens: list[str], idf: dict[str, float]) -> dict[str, float]:
-    counts = Counter(token for token in tokens if token in idf)
-    if not counts:
-        return {}
-    vector = {token: count * idf[token] for token, count in counts.items()}
-    magnitude = math.sqrt(sum(value * value for value in vector.values()))
-    return {token: value / magnitude for token, value in vector.items()}
+def _weighted_tokens(restaurant: models.Restaurant) -> Counter:
+    """Token counts for one venue, with each field weighted by how much it proves."""
+
+    counts: Counter = Counter()
+
+    def add(value: str | None, field: str) -> None:
+        if not value:
+            return
+        weight = FIELD_WEIGHTS[field]
+        for token in _tokenize(value):
+            counts[token] += weight
+
+    for dish in restaurant.dishes:
+        add(dish.name, "dish_name")
+        add(dish.tags, "dish_tags")
+
+    add(restaurant.cuisine_tags, "cuisine")
+    for review in restaurant.reviews:
+        if review.text and not review.fraud_flag:
+            add(review.text, "review")
+
+    add(restaurant.name, "name")
+    add(restaurant.good_for, "occasion")
+    add(restaurant.accessibility_flags, "accessibility")
+    if restaurant.type_tag:
+        add(restaurant.type_tag.value.replace("_", " "), "venue_type")
+
+    return counts
+
+
+def _document_length(restaurant: models.Restaurant) -> float:
+    """How much text a venue has, unweighted.
+
+    Deliberately not the sum of the weighted counts. That sum conflates "this
+    venue has a lot to say" with "we think the menu matters more than the name",
+    and BM25 then divides by it. A venue with a ten-dish menu came out twenty
+    times the average length and had its own dishes divided away, so searching
+    "dosa" put a shop called Dosa Hut above MTR, which actually serves it.
+
+    Length normalisation has to answer "is this document unusually long?", so it
+    needs a plain token count. Weighting stays on the term-frequency side, where
+    it belongs.
+    """
+
+    total = 0
+    for dish in restaurant.dishes:
+        total += len(_tokenize(dish.name))
+        total += len(_tokenize(dish.tags or ""))
+    total += len(_tokenize(restaurant.name))
+    total += len(_tokenize(restaurant.cuisine_tags or ""))
+    total += len(_tokenize(restaurant.good_for or ""))
+    total += len(_tokenize(restaurant.accessibility_flags or ""))
+    if restaurant.type_tag:
+        total += len(_tokenize(restaurant.type_tag.value.replace("_", " ")))
+    for review in restaurant.reviews:
+        if review.text and not review.fraud_flag:
+            total += len(_tokenize(review.text))
+    return float(total)
+
+
+BM25_K1 = 1.4
+BM25_B = 0.72
+
+
+def _bm25_score(
+    query_tokens: list[str],
+    document: dict[str, float],
+    idf: dict[str, float],
+    document_length: float,
+    average_length: float,
+) -> float:
+    """Score one document against a query.
+
+    Replaces cosine similarity, which was the wrong tool here for a specific and
+    observable reason. Cosine L2-normalises every document across all its terms,
+    so a venue with ten dishes has each of those dishes divided by the magnitude
+    of the entire menu. MTR lists ten dishes and therefore scored each one lower
+    than a venue whose entire identity was the word "dosa" -- a bigger, better
+    documented menu ranked *below* a shop called Dosa Corner. Searching "dosa"
+    put none of the four venues that actually have a dosa anywhere in the top
+    twenty.
+
+    BM25 fixes both halves. Term frequency saturates, so listing a dish twice
+    does not double the score, but listing ten dishes does not divide it either.
+    Length normalisation is a saturating penalty against the *average* document
+    rather than a divisor over the whole one, so breadth is mildly discouraged
+    instead of catastrophic.
+
+    The endpoint contract is unchanged: still a relevance number, ordered
+    descending, and still zero for anything with no term in common.
+    """
+
+    if average_length <= 0:
+        return 0.0
+    length_ratio = document_length / average_length
+    total = 0.0
+    for token in query_tokens:
+        frequency = document.get(token)
+        if not frequency:
+            continue
+        numerator = frequency * (BM25_K1 + 1.0)
+        denominator = frequency + BM25_K1 * (1.0 - BM25_B + BM25_B * length_ratio)
+        total += idf.get(token, 0.0) * numerator / denominator
+    return total
 
 
 @dataclass(frozen=True)
 class _Index:
     """An immutable snapshot of the searchable corpus."""
 
-    # Per-restaurant unit vectors, aligned with `order`.
-    vectors: list[dict[str, float]] = field(default_factory=list)
+    # Per-restaurant term counts, aligned with `order`. Weighted, so a dish name
+    # contributes more than the same word appearing in the venue's name.
+    documents: list[dict[str, float]] = field(default_factory=list)
     order: list[int] = field(default_factory=list)
     idf: dict[str, float] = field(default_factory=dict)
+    # Unweighted token counts, aligned with `documents`, plus their mean. These
+    # feed BM25's length normalisation and are deliberately independent of the
+    # field weights -- see `_document_length`.
+    lengths: list[float] = field(default_factory=list)
+    average_length: float = 0.0
 
     def is_empty(self) -> bool:
         return not self.order
@@ -154,10 +266,10 @@ def _build_index(db: Session) -> _Index:
     if not restaurants:
         return _Index()
 
-    documents = [_tokenize(_restaurant_text(restaurant)) for restaurant in restaurants]
+    documents = [_weighted_tokens(restaurant) for restaurant in restaurants]
     document_frequency: Counter[str] = Counter()
     for document in documents:
-        document_frequency.update(set(document))
+        document_frequency.update(document.keys())
     if not document_frequency:
         return _Index()
 
@@ -166,10 +278,13 @@ def _build_index(db: Session) -> _Index:
         token: math.log((document_count + 1) / (frequency + 1)) + 1
         for token, frequency in document_frequency.items()
     }
+    lengths = [_document_length(restaurant) for restaurant in restaurants]
     return _Index(
-        vectors=[_normalized_vector(document, idf) for document in documents],
+        documents=documents,
         order=[restaurant.id for restaurant in restaurants],
         idf=idf,
+        lengths=lengths,
+        average_length=(sum(lengths) / len(lengths)) if lengths else 0.0,
     )
 
 
@@ -215,17 +330,22 @@ def search_by_craving(
         sorted({token for token in query_tokens if token not in index.idf})
     )
 
-    query_vector = _normalized_vector(query_tokens, index.idf)
-    if not query_vector:
+    # A query made entirely of terms the corpus has never seen cannot be scored
+    # honestly, so it returns nothing rather than a confident ranking.
+    if not any(token in index.idf for token in query_tokens):
         return []
 
+    lengths = index.lengths or [0.0] * len(index.documents)
     scored: list[tuple[int, float]] = []
-    for position, document_vector in enumerate(index.vectors):
-        if not document_vector:
+    for position, document in enumerate(index.documents):
+        if not document:
             continue
-        score = sum(
-            query_value * document_vector.get(token, 0.0)
-            for token, query_value in query_vector.items()
+        score = _bm25_score(
+            query_tokens,
+            document,
+            index.idf,
+            lengths[position] if position < len(lengths) else 0.0,
+            index.average_length,
         )
         if score > 0:
             scored.append((index.order[position], score))

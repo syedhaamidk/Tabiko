@@ -211,7 +211,9 @@ export function addDish(restaurantId, name, tags) {
   return authFetch(`${BASE_URL}/restaurants/${restaurantId}/dishes`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, tags }),
+    // An untouched tags box is "", not null. The server treats blank as absent
+    // too, but sending null for "no value" is what the field means.
+    body: JSON.stringify({ name, tags: tags?.trim() ? tags.trim() : null }),
   }).then(handleResponse);
 }
 
