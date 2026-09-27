@@ -149,13 +149,13 @@ def test_a_successful_login_is_still_allowed_under_the_cap(client):
     assert client.get("/auth/me").status_code == 200
 
 
-def test_the_window_closes_again(monkeypatch):
+def test_the_window_closes_again(monkeypatch, rate_limit_db):
     """Counters must expire, or a caller is penalised forever."""
 
     from fastapi import HTTPException
 
-    now = [1000.0]
-    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    now = [1_000_000.0]
+    monkeypatch.setattr(time, "time", lambda: now[0], raising=False)
     ratelimit.reset()
 
     class FakeRequest:
@@ -172,7 +172,7 @@ def test_the_window_closes_again(monkeypatch):
     ratelimit.enforce(request, limit=3, bucket="1.2.3.4", scope="t")
 
 
-def test_separate_scopes_do_not_share_an_allowance():
+def test_separate_scopes_do_not_share_an_allowance(rate_limit_db):
     from fastapi import HTTPException
 
     ratelimit.reset()
@@ -189,7 +189,7 @@ def test_separate_scopes_do_not_share_an_allowance():
     ratelimit.enforce(request, limit=2, bucket="k", scope="register")
 
 
-def test_different_callers_have_separate_allowances():
+def test_different_callers_have_separate_allowances(rate_limit_db):
     from fastapi import HTTPException
 
     ratelimit.reset()
@@ -222,7 +222,12 @@ def test_a_forwarded_header_is_ignored_unless_trusting_a_proxy(monkeypatch):
     assert ratelimit.client_key(FakeRequest()) == "9.9.9.9"
 
 
-def test_a_counter_cannot_grow_without_bound():
+def test_a_counter_cannot_grow_without_bound(rate_limit_db):
+    """One client's traffic is one row per window, however many requests it makes."""
+
+    from sqlalchemy import text
+
+    engine, _ = rate_limit_db
     ratelimit.reset()
 
     class FakeRequest:
@@ -232,17 +237,31 @@ def test_a_counter_cannot_grow_without_bound():
     for _ in range(200):
         ratelimit.enforce(request, limit=1000, bucket="b", scope="t")
 
-    # The age cutoff is the bound, and it must not be shorter than the limit or
-    # the limiter silently stops firing.
-    assert len(ratelimit._counters["t:b"]) == 200
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "select count(*) from rate_limits where scope = 't' and client_key = 'b'"
+            )
+        ).scalar_one()
+
+    # 200 requests inside one window is one row, not 200. The count column
+    # carries the volume; the row count does not.
+    assert rows == 1, f"one client produced {rows} rows in a single window"
     assert ratelimit._WINDOW_SECONDS > 0
 
 
-def test_idle_keys_are_evicted(monkeypatch):
-    """An address sweep must not grow the table forever."""
+def test_idle_windows_are_evicted(monkeypatch, rate_limit_db):
+    """An address sweep must not grow the table forever.
 
-    now = [1000.0]
-    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    The bound is the same as it was when the counters were in memory: keep at
+    most a couple of windows' worth of history, and drop the rest on a timer.
+    """
+
+    from sqlalchemy import text
+
+    engine, _ = rate_limit_db
+    now = [1_000_000.0]
+    monkeypatch.setattr(time, "time", lambda: now[0], raising=False)
     ratelimit.reset()
 
     class FakeRequest:
@@ -250,18 +269,23 @@ def test_idle_keys_are_evicted(monkeypatch):
             self.client = type("C", (), {"host": host})()
 
     ratelimit.enforce(FakeRequest("1.1.1.1"), limit=100, bucket="k", scope="t")
-    assert ratelimit._counters
+    with engine.connect() as connection:
+        assert connection.execute(text("select count(*) from rate_limits")).scalar_one()
 
-    # Far enough in the future that the old key is idle, then add many new ones so
-    # the sweep is triggered.
-    now[0] += ratelimit._KEY_TTL_SECONDS + 1
-    for index in range(ratelimit._MAX_KEYS + 10):
-        ratelimit.enforce(
-            FakeRequest(f"host-{index}"), limit=100, bucket=f"k{index}", scope="t"
+    # Push every window into the past and run the sweep.
+    stale = int(now[0]) - 10 * ratelimit._WINDOW_SECONDS
+    with engine.begin() as connection:
+        connection.execute(
+            text("update rate_limits set window_start = :stale"), {"stale": stale}
         )
+    ratelimit._last_sweep = 0.0
+    ratelimit._sweep(now[0])
 
-    assert "t:k" not in ratelimit._counters
-    assert len(ratelimit._counters) <= ratelimit._MAX_KEYS + 10
+    with engine.connect() as connection:
+        remaining = connection.execute(
+            text("select count(*) from rate_limits where client_key = 'k'")
+        ).scalar_one()
+    assert remaining == 0, f"{remaining} expired windows survived the sweep"
 
 
 # ---------- headers ----------

@@ -95,6 +95,43 @@ def anon_client(db_engine) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture
+def rate_limit_db(tmp_path, monkeypatch):
+    """A file-backed database for the rate limiter, shared by every test that needs it.
+
+    The limiter's counters live in the database rather than in process memory,
+    so two things follow that the rest of the suite does not have to care about.
+
+    It cannot use the in-memory engine the other fixtures create: a subprocess
+    cannot open `:memory:`, and the two-process test needs one.
+
+    And it must be redirected explicitly. Without this the limiter would resolve
+    `app.database.engine` to the *development* database and every test run would
+    quietly write rate-limit rows into it, which is how a test suite starts
+    throttling the person running it.
+    """
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import StaticPool
+
+    path = tmp_path / "ratelimit.db"
+    url = f"sqlite:///{path.as_posix()}"
+    engine = create_engine(
+        url,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+
+    from app import database as database_module
+    from app.models import Base
+
+    Base.metadata.create_all(bind=engine)
+    monkeypatch.setattr(database_module, "engine", engine)
+    yield engine, url
+    engine.dispose()
+
+
+@pytest.fixture
 def seeded_data(session_factory) -> dict[str, int]:
     user = _ensure_test_user(session_factory)
     with session_factory() as db:

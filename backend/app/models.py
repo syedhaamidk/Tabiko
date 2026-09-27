@@ -287,3 +287,25 @@ class Favorite(Base):
 
     user = relationship("User", back_populates="favorites")
     restaurant = relationship("Restaurant", back_populates="favorites")
+
+
+class RateLimit(Base):
+    """One fixed window of one rate-limit bucket.
+
+    The window is part of the primary key, so a new minute is a new row rather
+    than a reset-and-race. `count` is maintained by a single atomic
+    `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`, which is what lets several
+    worker processes share one allowance instead of each enforcing its own.
+    """
+
+    __tablename__ = "rate_limits"
+    __table_args__ = (
+        # The sweep that clears expired windows looks up by age alone; nothing
+        # else queries the table without also constraining the scope and key.
+        Index("ix_rate_limits_window_start", "window_start"),
+    )
+
+    scope = Column(String(64), primary_key=True)
+    client_key = Column(String(255), primary_key=True)
+    window_start = Column(Integer, primary_key=True)
+    count = Column(Integer, nullable=False, default=0, server_default="0")
