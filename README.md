@@ -13,6 +13,7 @@
 [![Docker](https://img.shields.io/badge/deploy-docker_compose-2496ED?style=flat-square&logo=docker)](docker-compose.yml)
 [![Tests](https://img.shields.io/badge/tests-615_passing-brightgreen?style=flat-square)](#verification)
 [![OSM](https://img.shields.io/badge/data-©_OpenStreetMap_contributors-7EBC6F?style=flat-square)](https://www.openstreetmap.org/copyright)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 
 *Real cravings · Cult dishes · Local intel · A map that changes mood with every cuisine*
 
@@ -235,6 +236,14 @@ docker compose up -d --build   # full deployment, city builds itself on first bo
 ```
 
 Report bugs with reproduction steps. Don’t invent data — no fake counts, cuisines, street names, or dishes. Run the verification commands above before opening a PR.
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).
+
+Place data © OpenStreetMap contributors ([ODbL](https://www.openstreetmap.org/copyright)). The pinned snapshot in `backend/data/` is OSM-derived; attribution is shown in the UI.
 
 ---
 
