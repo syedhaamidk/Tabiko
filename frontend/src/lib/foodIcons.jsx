@@ -1,3 +1,5 @@
+import { dishIconKey, dishIconMarkup } from "./dishIcons";
+
 const ICON_PATHS = {
   south_indian: `
     <path d="M13 42c0-15 10-27 23-27 9 0 16 6 16 15 0 11-10 20-23 20-9 0-16-3-16-8Z" fill="#fff"/>
@@ -76,6 +78,39 @@ export function foodIconSvgMarkup(visual, size = 46, instanceId = "tabiko") {
     <path d="M12 3h40c6 0 9 4 9 10v38c0 6-4 10-10 10H13c-6 0-10-4-10-10V13C3 7 6 3 12 3Z" fill="url(#${patternId})"/>
     <g>${shape}</g>
   </svg>`;
+}
+
+const TILE_PATH =
+  "M12 3h40c6 0 9 4 9 10v38c0 6-4 10-10 10H13c-6 0-10-4-10-10V13C3 7 6 3 12 3Z";
+
+/**
+ * A dish's icon, on the venue's own tile.
+ *
+ * The tile is deliberately the restaurant's — its colour and pattern are the
+ * theme, and a page of dishes should read as one menu. Only the glyph inside
+ * changes, so a cafe's menu stops being six identical coffee cups while the
+ * page keeps looking like that cafe.
+ */
+export function DishGlyph({ dish, visual, size = 34, instanceId = "tabiko" }) {
+  const id = safeId(instanceId);
+  const patternId = `${id}-pattern`;
+  const shape = dishIconMarkup(dish);
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block", overflow: "visible" }}
+      data-dish-icon={dishIconKey(dish?.name, dish?.tags)}
+    >
+      <defs dangerouslySetInnerHTML={{ __html: patternMarkup(visual.pattern, patternId) }} />
+      <path d={TILE_PATH} fill={visual.color} stroke="#2A0E1E" strokeWidth="3" />
+      <path d={TILE_PATH} fill={`url(#${patternId})`} />
+      <g dangerouslySetInnerHTML={{ __html: shape }} />
+    </svg>
+  );
 }
 
 export default function FoodGlyph({ visual, size = 48, instanceId = "tabiko" }) {

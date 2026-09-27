@@ -11,7 +11,7 @@ import {
 import { useTheme } from "../ThemeContext";
 import { useAuth } from "../AuthContext";
 import BrandMark from "./BrandMark";
-import FoodGlyph from "../lib/foodIcons";
+import FoodGlyph, { DishGlyph } from "../lib/foodIcons";
 import InterfaceIcon from "./InterfaceIcon";
 import {
   getRestaurantVisual,
@@ -459,7 +459,8 @@ export default function RestaurantDetail({ restaurantId, onBack }) {
               {dishes.map((dish) => (
                 <article className="dish-card" key={dish.id}>
                   <div className="dish-card__top">
-                    <FoodGlyph
+                    <DishGlyph
+                      dish={dish}
                       visual={visual}
                       size={34}
                       instanceId={`dish-${dish.id}`}
