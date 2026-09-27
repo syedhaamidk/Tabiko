@@ -309,7 +309,7 @@ def test_adding_a_menu_makes_the_freshness_claim_stale(client, place, session_fa
 
 
 def test_bulk_entry_credits_a_verified_critic(client, place, session_factory):
-    from conftest import TEST_EMAIL
+    from tests.conftest import TEST_EMAIL
 
     with session_factory() as db:
         db.query(models.User).filter_by(

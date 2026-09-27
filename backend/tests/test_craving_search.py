@@ -9,10 +9,10 @@ answer questions its corpus could not answer as though it could.
 import time
 
 import pytest
-from conftest import TEST_EMAIL
 
 from app import craving_search
 from app.models import Dish, Restaurant, Review, User
+from tests.conftest import TEST_EMAIL
 
 
 @pytest.fixture(autouse=True)
