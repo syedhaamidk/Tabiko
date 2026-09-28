@@ -110,6 +110,37 @@ ADMIN_EMAILS = {
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# The OAuth client ID Google issued for this deployment's web application.
+# Empty means Google sign-in is not configured, and the endpoint refuses
+# rather than verifying against nothing. A client ID is public by design —
+# it ships in the frontend bundle — so this is configuration, not a secret.
+GOOGLE_CLIENT_ID = os.getenv("TABIKO_GOOGLE_CLIENT_ID", "").strip()
+
+
+def verify_google_token(id_token: str) -> dict:
+    """Verify a Google ID token and return its claims.
+
+    Signature, audience, issuer and expiry are all checked by Google's own
+    verifier against Google's current certificates — reimplementing any of
+    that here would be a way to get it subtly wrong. The certificates are
+    fetched over HTTPS on each call rather than cached: logins are capped at
+    a handful per minute per client, so one extra request is invisible, and a
+    cache is a place for a rotated-out key to linger.
+
+    Raises ValueError for anything that is not a valid token for this project,
+    which the endpoint reports as a 401 without distinguishing why. Saying
+    *which* check failed would teach an attacker which forgeries get how far.
+    """
+
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token as google_id_token
+
+    if not GOOGLE_CLIENT_ID:
+        raise ValueError("Google sign-in is not configured")
+    return google_id_token.verify_oauth2_token(
+        id_token, google_requests.Request(), GOOGLE_CLIENT_ID
+    )
+
 
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")

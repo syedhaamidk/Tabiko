@@ -31,6 +31,12 @@ export function AuthProvider({ children }) {
     setUser(await api.getCurrentUser());
   }, []);
 
+  const doGoogleLogin = useCallback(async (idToken) => {
+    const session = await api.loginWithGoogle(idToken);
+    api.setTokens(session);
+    setUser(await api.getCurrentUser());
+  }, []);
+
   // Revokes the session server-side, not just locally. That is the whole point of
   // a refresh token: signing out has to end the session, not throw away a copy of
   // it while leaving it valid for anyone who intercepted it.
@@ -46,7 +52,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login: doLogin, register: doRegister, logout: doLogout, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, login: doLogin, register: doRegister, loginWithGoogle: doGoogleLogin, logout: doLogout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

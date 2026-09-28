@@ -175,6 +175,11 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     # Nullable only for legacy rows created before real authentication existed.
     password_hash = Column(String(255), nullable=True)
+    # The stable subject Google issues for this account in this project. Unique
+    # and nullable: most readers never have one. Set exactly once, on first
+    # Google sign-in — by verified-email link or by account creation. Indexed
+    # like email, because the per-login lookup is by subject.
+    google_sub = Column(String(255), unique=True, nullable=True, index=True)
     is_founding_reviewer = Column(Boolean, nullable=False, default=False)
     is_admin = Column(Boolean, nullable=False, default=False)
     reviewer_type = Column(

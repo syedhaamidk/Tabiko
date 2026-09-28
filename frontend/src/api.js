@@ -137,6 +137,30 @@ export function login(email, password) {
   }).then(handleResponse);
 }
 
+/**
+ * Sign in with a Google ID token from Google Identity Services.
+ *
+ * Plain `fetch`, not `authFetch`, for the same reason as login: there is no
+ * session yet to refresh with, and a 401 here means "Google said no", not
+ * "the access token expired".
+ */
+export function loginWithGoogle(idToken) {
+  return fetch(`${BASE_URL}/auth/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id_token: idToken }),
+  }).then(handleResponse);
+}
+
+/**
+ * Which front doors the server has. The Google client ID is public by design
+ * — it ships in the bundle either way — so it comes from here rather than a
+ * build-time variable that can drift from what the server verifies against.
+ */
+export function getAuthProviders() {
+  return fetch(`${BASE_URL}/auth/providers`).then(handleResponse);
+}
+
 export function getCurrentUser() {
   return authFetch(`${BASE_URL}/auth/me`).then(handleResponse);
 }

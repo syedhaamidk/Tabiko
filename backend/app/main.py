@@ -140,6 +140,8 @@ with THEME_TOKENS_PATH.open(encoding="utf-8") as theme_file:
 LOGIN_RATE_LIMIT = int(os.getenv("TABIKO_LOGIN_RATE_LIMIT", "10"))
 REGISTER_RATE_LIMIT = int(os.getenv("TABIKO_REGISTER_RATE_LIMIT", "5"))
 REFRESH_RATE_LIMIT = int(os.getenv("TABIKO_REFRESH_RATE_LIMIT", "30"))
+# Google sign-in is anonymous and cheap like a login, so it is capped like one.
+GOOGLE_RATE_LIMIT = int(os.getenv("TABIKO_GOOGLE_RATE_LIMIT", "10"))
 # Bulk dish entry is the one write a reader can repeat, so it gets its own cap.
 DISH_BULK_RATE_LIMIT = int(os.getenv("TABIKO_DISH_BULK_RATE_LIMIT", "20"))
 # A real menu is 20-30 lines. Beyond this someone is bulk generating, not
@@ -658,6 +660,119 @@ def login(
         access_token=access,
         refresh_token=refresh,
         expires_in=auth.ACCESS_TOKEN_SECONDS,
+    )
+
+
+@app.post("/auth/google", response_model=schemas.TokenOut)
+def login_with_google(
+    payload: schemas.GoogleLoginIn,
+    request: Request,
+    db: DbSession,
+) -> schemas.TokenOut:
+    """Sign in with a Google ID token from Google Identity Services.
+
+    The browser proves who the reader is to Google; Google proves it to this
+    endpoint by signing the token. All this endpoint does is check that
+    signature (audience, issuer, expiry — via Google's own verifier) and then
+    hand out exactly the session a password login would: same access token,
+    same rotating refresh token, same revocation. Nothing downstream knows or
+    cares which front door the reader came through.
+
+    Three cases, in order. A known subject signs straight in. An unknown
+    subject with a *verified* email either links to the matching account —
+    keeping its reviews, saves and follows — or creates a passwordless one.
+    An unverified email proves nothing about that address and gets a 401,
+    because accepting it would let anyone claim anyone else's account by
+    typing their address into a Google signup form.
+    """
+
+    ratelimit.enforce(
+        request,
+        limit=GOOGLE_RATE_LIMIT,
+        bucket=ratelimit.client_key(request),
+        scope="google",
+    )
+    if not auth.GOOGLE_CLIENT_ID:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured on this server.",
+        )
+    try:
+        claims = auth.verify_google_token(payload.id_token)
+    except ValueError:
+        # Deliberately one answer for every failure: expired, forged,
+        # wrong audience, wrong issuer. Distinguishing them teaches an
+        # attacker which forgeries get how far.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That Google sign-in was not accepted. Try again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
+
+    subject = claims.get("sub")
+    email = str(claims.get("email", "")).strip().lower()
+    if not subject or not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That Google sign-in was not accepted. Try again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not claims.get("email_verified"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="That Google account's email is not verified.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(models.User).filter_by(google_sub=subject).first()
+    if user is None:
+        user = db.query(models.User).filter_by(email=email).first()
+        if user is not None:
+            user.google_sub = subject
+        else:
+            user = models.User(
+                name=str(claims.get("name") or email.split("@")[0])[:255],
+                email=email,
+                password_hash=None,
+                google_sub=subject,
+                is_admin=email in auth.ADMIN_EMAILS,
+            )
+            db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            # Lost a race: a concurrent sign-in created or linked the same
+            # identity first. Re-read rather than fail — the desired state is
+            # the state it is in.
+            db.rollback()
+            user = (
+                db.query(models.User).filter_by(google_sub=subject).first()
+                or db.query(models.User).filter_by(email=email).first()
+            )
+            if user is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="That Google sign-in was not accepted. Try again.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                ) from None
+
+    access, refresh = auth.issue_session(db, user)
+    db.commit()
+    return schemas.TokenOut(
+        access_token=access,
+        refresh_token=refresh,
+        expires_in=auth.ACCESS_TOKEN_SECONDS,
+    )
+
+
+@app.get("/auth/providers", response_model=schemas.AuthProvidersOut)
+def auth_providers() -> schemas.AuthProvidersOut:
+    """Which front doors exist. Public, because the client needs it before it
+    has any credentials — and a client ID is public by design anyway."""
+
+    return schemas.AuthProvidersOut(
+        google_enabled=bool(auth.GOOGLE_CLIENT_ID),
+        google_client_id=auth.GOOGLE_CLIENT_ID or None,
     )
 
 

@@ -8,7 +8,7 @@
 [![Frontend](https://img.shields.io/badge/frontend-React_18_+_Vite-7B2CFF?style=for-the-badge&logo=react&logoColor=white)](frontend/)
 [![Database](https://img.shields.io/badge/database-SQLite_WAL-FF6B35?style=for-the-badge&logo=sqlite&logoColor=white)](backend/app/database.py)
 [![Deploy](https://img.shields.io/badge/deploy-docker_compose-2A0E1E?style=for-the-badge&logo=docker&logoColor=white)](docker-compose.yml)
-[![Tests](https://img.shields.io/badge/tests-622_passing-00D084?style=for-the-badge)](#-verification)
+[![Tests](https://img.shields.io/badge/tests-657_passing-00D084?style=for-the-badge)](#-verification)
 [![OSM](https://img.shields.io/badge/data-©_OpenStreetMap_contributors-7EBC6F?style=for-the-badge)](https://www.openstreetmap.org/copyright)
 [![License](https://img.shields.io/badge/license-MIT-00D084?style=for-the-badge)](LICENSE)
 
@@ -162,7 +162,7 @@ flowchart LR
 | Area | Endpoints |
 |---|---|
 | Core | `GET /stats` · `GET /filter-options` · `GET /restaurants` · `GET /restaurants/points` · `GET /restaurants/{id}` · `GET /restaurants/{id}/theme` · `GET /restaurants/{id}/stats` |
-| Auth | `POST /auth/register` (5/min) · `POST /auth/login` (10/min) · `POST /auth/refresh` (30/min) · `POST /auth/logout` · `GET/PATCH /auth/me` |
+| Auth | `POST /auth/register` (5/min) · `POST /auth/login` (10/min) · `POST /auth/google` (10/min) · `POST /auth/refresh` (30/min) · `POST /auth/logout` · `GET/PATCH /auth/me` · `GET /auth/providers` |
 | Menus & reviews | `GET/POST /restaurants/{id}/dishes` · `POST /restaurants/{id}/dishes/bulk` · `PATCH /restaurants/{id}/confirm-menu` · `POST /reviews` · `GET /reviews/restaurant/{id}?following_only=true` · `GET/DELETE /users/{id}/follow` · `GET /feed/following` |
 | Saved & search | `GET /favorites` · `PUT/DELETE /favorites/{id}` · `GET /favorites/places` · `GET /search/craving?q=` · `GET /users/search?q=` |
 | Moderation | `GET /reviews/flagged` · `PATCH /reviews/{id}/moderation` (admin) |
@@ -185,16 +185,32 @@ TABIKO_DATABASE_URL=sqlite:////data/tabiko.db   # the line that matters — volu
 TABIKO_JWT_SECRET=replace-with-a-long-random-secret  # ≥32 chars, required outside dev
 TABIKO_ENV=production
 TABIKO_ADMIN_EMAILS=you@example.com
+TABIKO_GOOGLE_CLIENT_ID=                          # empty = no Google button; see below
 TABIKO_CORS_ORIGINS=https://tabiko.example
 TABIKO_TRUST_PROXY=false                          # only true behind something that overwrites X-Forwarded-For
 TABIKO_LOGIN_RATE_LIMIT=10
 TABIKO_REGISTER_RATE_LIMIT=5
+TABIKO_GOOGLE_RATE_LIMIT=10
 TABIKO_UPLOAD_RATE_LIMIT=30
 TABIKO_USER_SEARCH_LIMIT=25
 TABIKO_FEED_LIMIT=50
 ```
 
 Full list in `backend/.env.example` (`backend/.env` is gitignored). Never put secrets in `VITE_*` variables — Vite inlines them into the client bundle.
+
+<details>
+<summary><b>Google sign-in setup (5 minutes, once)</b></summary>
+
+The server verifies Google ID tokens itself, so all it needs is the OAuth
+client ID of a Web application:
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → **Create Credentials → OAuth client ID → Web application**.
+2. Under **Authorized JavaScript origins**, add every origin the app is served from — `http://localhost:5173` for local dev and the production domain when deployed. Google refuses to issue tokens to origins not on this list.
+3. Copy the client ID into `TABIKO_GOOGLE_CLIENT_ID` and restart. The Google button appears on its own; empty means it never renders and `POST /auth/google` answers 503.
+
+No client secret is needed and none is stored: the Identity Services button flow never uses one. A reader signing in with an address that already has a password account keeps that account (and its reviews) — the Google identity links onto it. Only verified Google emails can create or claim accounts.
+
+</details>
 
 </details>
 
@@ -205,9 +221,9 @@ Full list in `backend/.env.example` (`backend/.env` is gitignored). Never put se
 
 | Suite | Count |
 |---|---|
-| Backend (`cd backend && pytest -q`) | **464 passing** |
+| Backend (`cd backend && pytest -q`) | **478 passing** |
 | Frontend (`cd frontend && npm test`) | **158 passing** |
-| Total | **622 passing** |
+| Total | **657 passing** |
 | Lint / format / migrations | `ruff check`, `ruff format --check`, `alembic check` — clean |
 | Security audit | `npm audit --audit-level=high` — clean |
 
@@ -248,7 +264,7 @@ tabiko/
 │   ├── migrations/     Alembic — the sole schema authority (9 revisions)
 │   ├── scripts/        build_city · backup/restore · preflight · probes · seed_reference_data
 │   ├── data/           osm_snapshot.json.gz + city_provenance.json (the reproducible pin)
-│   └── tests/          464 tests
+│   └── tests/          478 tests
 ├── frontend/
 │   ├── src/            App · 16 components · theme + auth contexts · api client
 │   ├── scripts/        neighborhood + citywide map builders · PWA icon rasteriser

@@ -223,3 +223,39 @@ describe("unauthenticated calls", () => {
     expect(fetchMock()).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("google sign-in", () => {
+  it("sends the ID token and returns the session untouched", async () => {
+    const session = { access_token: "a1", refresh_token: "r1", expires_in: 1800 };
+    fetchMock().mockResolvedValue(jsonResponse(session));
+
+    await expect(api.loginWithGoogle("google-id-token")).resolves.toEqual(session);
+
+    const [url, options] = fetchMock().mock.calls[0];
+    expect(url).toBe("/api/auth/google");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ id_token: "google-id-token" });
+  });
+
+  it("does not go through the refresh machinery", async () => {
+    // There is no session yet, so a 401 means Google said no — not that an
+    // access token expired. Retrying with a refresh would be nonsense twice
+    // over: there is no refresh token, and the failure is not an expiry.
+    fetchMock().mockResolvedValue(jsonResponse({ detail: "no" }, 401));
+
+    await expect(api.loginWithGoogle("bad-token")).rejects.toMatchObject({ status: 401 });
+    expect(fetchMock()).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads which front doors exist", async () => {
+    fetchMock().mockResolvedValue(
+      jsonResponse({ google_enabled: true, google_client_id: "test.apps.googleusercontent.com" }),
+    );
+
+    await expect(api.getAuthProviders()).resolves.toEqual({
+      google_enabled: true,
+      google_client_id: "test.apps.googleusercontent.com",
+    });
+    expect(fetchMock().mock.calls[0][0]).toBe("/api/auth/providers");
+  });
+});

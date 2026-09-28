@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
 import InterfaceIcon from "./InterfaceIcon";
+import GoogleSignIn from "./GoogleSignIn";
 
 const REVIEWER_TYPE_OPTIONS = [
   { value: "normal", label: "Everyday diner", icon: "solo" },
@@ -135,6 +136,7 @@ export default function AuthBar() {
           <button className="app-button app-button--primary" onClick={() => setMode("register")}>
             <InterfaceIcon name="sparkles" size={16} /> Sign up free
           </button>
+          <GoogleSignIn onDone={() => {}} />
         </div>
       </div>
     );
@@ -176,6 +178,12 @@ export default function AuthBar() {
         {submitting ? "One sec…" : mode === "login" ? "Log in" : "Create account"}
       </button>
       <button className="app-button app-button--ghost" type="button" onClick={() => setMode(null)}>Cancel</button>
+      <GoogleSignIn
+        onDone={() => {
+          setMode(null);
+          setForm({ name: "", email: "", password: "" });
+        }}
+      />
       {error && <span className="auth-error">{error}</span>}
     </form>
   );

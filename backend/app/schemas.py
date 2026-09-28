@@ -131,6 +131,29 @@ class TokenOut(BaseModel):
     expires_in: int
 
 
+class GoogleLoginIn(BaseModel):
+    """The ID token Google Identity Services handed the browser.
+
+    This is not an access token and it grants nothing by itself. The server
+    verifies its signature against Google's certificates and mints a Tabiko
+    session from the claims — the same session a password login would get.
+    """
+
+    id_token: Annotated[str, Field(min_length=1, max_length=8192)]
+
+
+class AuthProvidersOut(BaseModel):
+    """Which front doors exist, so the client renders the right buttons.
+
+    The Google client ID is public by design — it ships in the frontend bundle
+    either way — so serving it here keeps one configuration source instead of
+    a VITE_ variable that can drift from the server actually verifying against.
+    """
+
+    google_enabled: bool
+    google_client_id: str | None = None
+
+
 class RefreshIn(BaseModel):
     refresh_token: Annotated[str, StringConstraints(min_length=20, max_length=200)]
 
