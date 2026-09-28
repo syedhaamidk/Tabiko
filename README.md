@@ -8,7 +8,7 @@
 [![Frontend](https://img.shields.io/badge/frontend-React_18_+_Vite-7B2CFF?style=for-the-badge&logo=react&logoColor=white)](frontend/)
 [![Database](https://img.shields.io/badge/database-SQLite_WAL-FF6B35?style=for-the-badge&logo=sqlite&logoColor=white)](backend/app/database.py)
 [![Deploy](https://img.shields.io/badge/deploy-docker_compose-2A0E1E?style=for-the-badge&logo=docker&logoColor=white)](docker-compose.yml)
-[![Tests](https://img.shields.io/badge/tests-615_passing-00D084?style=for-the-badge)](#-verification)
+[![Tests](https://img.shields.io/badge/tests-622_passing-00D084?style=for-the-badge)](#-verification)
 [![OSM](https://img.shields.io/badge/data-©_OpenStreetMap_contributors-7EBC6F?style=for-the-badge)](https://www.openstreetmap.org/copyright)
 [![License](https://img.shields.io/badge/license-MIT-00D084?style=for-the-badge)](LICENSE)
 
@@ -205,9 +205,9 @@ Full list in `backend/.env.example` (`backend/.env` is gitignored). Never put se
 
 | Suite | Count |
 |---|---|
-| Backend (`cd backend && pytest -q`) | **457 passing** |
+| Backend (`cd backend && pytest -q`) | **464 passing** |
 | Frontend (`cd frontend && npm test`) | **158 passing** |
-| Total | **615 passing** |
+| Total | **622 passing** |
 | Lint / format / migrations | `ruff check`, `ruff format --check`, `alembic check` — clean |
 | Security audit | `npm audit --audit-level=high` — clean |
 
@@ -248,7 +248,7 @@ tabiko/
 │   ├── migrations/     Alembic — the sole schema authority (9 revisions)
 │   ├── scripts/        build_city · backup/restore · preflight · probes · seed_reference_data
 │   ├── data/           osm_snapshot.json.gz + city_provenance.json (the reproducible pin)
-│   └── tests/          457 tests
+│   └── tests/          464 tests
 ├── frontend/
 │   ├── src/            App · 16 components · theme + auth contexts · api client
 │   ├── scripts/        neighborhood + citywide map builders · PWA icon rasteriser

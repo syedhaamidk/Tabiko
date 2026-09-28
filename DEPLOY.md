@@ -21,13 +21,19 @@ Get `cloudflared` from https://github.com/cloudflare/cloudflared/releases
 (`cloudflared-windows-amd64.exe` on Windows, no install, no signup). Confirm
 with `curl https://<your-url>/stats` — `places` should read **7683**.
 
-**Longer-lived:** Fly.io below — stable URL, sleeps when idle, still free.
-
-**✦ FREE ✦ ONE COMMAND DEPLOYS ✦ SLEEPS WHEN IDLE ✦**
-
-</div>
+**Always-on, still free:** Supabase Postgres + Render below. The app runs on
+their machines, the data lives in a real database, and nothing on your desk
+stays switched on. This is the one to use if the tunnel's limits bother you.
 
 ---
+
+## Fly.io (the carded alternative)
+
+Fly.io typically asks for a card at signup even for the free allowance, which
+is why it sits second here despite working well: one small machine, one
+persistent volume, TLS included — and `fly.toml` in the repo root already
+describes it. If you go this way instead of Supabase+Render, SQLite stays the
+database and nothing in this section changes.
 
 ## What you need
 
@@ -64,18 +70,66 @@ curl https://<your-app>.fly.dev/stats
 `places` should read **7683**. If it reads `0`, the volume isn't mounted —
 check `fly status -a tabiko` and that step 3 used the same app and region.
 
-## Day two
+## Supabase + Render (the always-on free path)
+
+Why these two: Supabase gives free Postgres without a card, Render runs the
+container without a card, and the app's Postgres support is proven — migrations
+0001–0009 apply cleanly, the transfer path is tested live in CI, and the rate
+limiter, auth, reviews, follows and themes were all exercised against a real
+server. The one thing that does not cross over is `scripts/backup.py`
+(SQLite API) — back up from the Supabase dashboard instead.
+
+### 1. The database (Supabase, ~5 min)
+
+1. Sign up at supabase.com (free tier, no card) → **New project**, any name,
+   region closest to your readers, and a strong **database password** — save it.
+2. Wait for provisioning, then **Project Settings → Database → Connection
+   string → URI**. It looks like
+   `postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres`.
+   If your password has special characters, use the dashboard's URI as-is
+   (it is already encoded) rather than retyping it.
+
+### 2. Seed it from your machine
+
+Your laptop builds the city from the committed snapshot and copies it over.
+Nothing is uploaded except rows.
+
+```bash
+cd backend
+python -m scripts.build_city            # builds tabiko.db if you don't have one
+TABIKO_DATABASE_URL="<paste-the-supabase-uri>" \
+  python -m scripts.transfer_city
+```
+
+Expected ending: `done: 7761 rows across 7 tables, all verified.` (7,683
+places + 77 reference dishes + the seed account). The script migrates first,
+refuses a non-empty database, and fails loudly on any count mismatch — there
+is no `--force` because wiping a database is a decision, not a flag.
+
+### 3. The app (Render, ~10 min)
+
+1. Sign up at render.com (free tier, no card) → **New → Blueprint** → point it
+   at your fork. `render.yaml` in the repo root describes the service.
+2. When prompted, set the two secrets it cannot commit:
+   - `TABIKO_DATABASE_URL` — the same Supabase URI.
+   - `TABIKO_JWT_SECRET` — generate one:
+     `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+3. Deploy. First boot runs migrations (no-op — already migrated) and serves.
+
+Confirm: `curl https://<your-app>.onrender.com/stats` → `places: 7683`.
+
+## Day two on the free path
 
 | | |
 |---|---|
-| **Sleeping** | The machine stops when nobody's visiting and wakes on the next request (a few seconds of cold start). This is what keeps it free. |
-| **One machine, always** | Never scale past 1 (`fly scale count 1 -a tabiko` to be sure). Two writers on one SQLite file is corruption, not scaling. |
-| **Out of memory?** | One worker holds ~120 MB of index. If the 256 MB machine OOMs, give it room: `fly scale memory 512 -a tabiko`. |
-| **Backups** | Snapshot the volume from the Fly dashboard before any big change. The app's own `scripts/backup.py` also works over `fly ssh console`. |
-| **Custom domain** | Optional, later: `fly certs add <your-domain>` and point DNS at the app. TLS is automatic either way. |
-| **Logs** | `fly logs -a tabiko`. Health endpoint for uptime checks: `/health/live`. |
+| **Sleeping** | Render sleeps the app after idle and wakes it on request (cold start ~30 s). Supabase pauses databases after 7 idle days — restore with one click in their dashboard. Regular visitors prevent both. |
+| **One instance, always** | `render.yaml` pins one. More gain nothing here and multiply connections against a small free database. |
+| **Uploads are ephemeral** | Photos live on Render's disk, which is wiped on restart. Dishes, reviews, follows and accounts are safe in Postgres; dish *photos* are not. Object storage is the fix, listed as future work. |
+| **Logs / health** | Render dashboard logs; `/health/live` for uptime checks. |
 
-## What free doesn't cover
+---
+
+## What free doesn't cover (every path above)
 
 - **Cold starts.** An idle app takes a few seconds to wake. A reader's first tap after a quiet spell waits; every tap after that is fast.
 - **Scale.** One box, one writer — same as the documented limit everywhere else in this repo. A crowd needs paid infrastructure, not code changes.

@@ -336,6 +336,49 @@ def destructive_targets(database: Path) -> dict[str, int]:
         connection.close()
 
 
+def _if_empty_remote(url: str) -> int:
+    """Decide whether a non-SQLite database needs seeding, without touching it.
+
+    Container boots run `build_city --if-empty` on every start. Against SQLite
+    that builds a missing city from the snapshot; against PostgreSQL it must be
+    a read-only question, because this script cannot build there — the city is
+    seeded once, out of band, with `transfer_city`. Rebuilding here would
+    destroy reader data, and building blindly would write to a database through
+    a path that was never built for it. So: count, then either leave it alone
+    or refuse loudly with the exact command that fixes it. An empty deployment
+    that boots and serves an empty map is the failure this project refuses to
+    have quietly.
+    """
+
+    from sqlalchemy import create_engine, text
+
+    try:
+        engine = create_engine(url, future=True)
+    except Exception as exc:  # noqa: BLE001 - reported, not raised
+        log(f"Could not reach the database ({exc}). Refusing to boot blind.")
+        return 1
+    try:
+        with engine.connect() as connection:
+            places = connection.execute(
+                text("select count(*) from restaurants")
+            ).scalar_one()
+    except Exception as exc:  # noqa: BLE001 - an unmigrated database reads the same as unreachable here
+        log("The database is unreachable or has no schema, so this boot cannot serve.")
+        log(f"  ({type(exc).__name__})")
+        log("Migrate and seed it first:")
+        log("  python -m scripts.transfer_city --target <postgresql-url>")
+        return 1
+    finally:
+        engine.dispose()
+
+    if places:
+        log(f"The database already holds {places} places. Leaving it alone.")
+        return 0
+    log("The database holds no places. Seed it before booting:")
+    log("  python -m scripts.transfer_city --target <postgresql-url>")
+    return 1
+
+
 def count_places(database: Path) -> int:
     """How many places are already in `database`, or 0 if it has no schema yet."""
 
@@ -400,6 +443,13 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    # A PostgreSQL URL never reaches default_database(), which rightly refuses
+    # to replay a file-based snapshot into a server. The remote check above is
+    # the only --if-empty behaviour that exists there.
+    database_url = (os.getenv("TABIKO_DATABASE_URL") or "").strip()
+    if args.if_empty and database_url and not database_url.startswith("sqlite"):
+        return _if_empty_remote(database_url)
 
     if args.database is None:
         # Resolved here rather than as an argparse default, so that setting

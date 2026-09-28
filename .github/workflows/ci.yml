@@ -23,6 +23,25 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    # A live PostgreSQL for the transfer tests. Everything else runs on
+    # in-memory SQLite; only tests/test_transfer.py looks at this, and it
+    # skips without it — so a developer without Postgres still gets green.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tabiko
+          POSTGRES_PASSWORD: tabiko-test-2026
+          POSTGRES_DB: tabiko_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tabiko"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TABIKO_TEST_PG_URL: postgresql+psycopg://tabiko:tabiko-test-2026@localhost:5432/tabiko_test
     defaults:
       run:
         working-directory: backend

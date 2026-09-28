@@ -40,6 +40,19 @@ WIDENED_TYPES = LEGACY_TYPES + (
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        # Postgres enums are real types, so widening means adding labels, not
+        # recreating the table. The batch path below fails here: dropping the
+        # primary key is refused while foreign keys depend on it.
+        for label in WIDENED_TYPES:
+            if label not in LEGACY_TYPES:
+                op.execute(
+                    sa.text(
+                        f"ALTER TYPE restauranttype ADD VALUE IF NOT EXISTS '{label}'"
+                    )
+                )
+        return
+
     widened = sa.Enum(*WIDENED_TYPES, name="restauranttype")
     with op.batch_alter_table("restaurants", recreate="always") as batch_op:
         batch_op.alter_column(
@@ -51,6 +64,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        # Postgres cannot remove enum labels. Leaving the wider set in place is
+        # harmless: it is a strict superset, and nothing writes the new labels
+        # after a downgrade.
+        return
+
     legacy = sa.Enum(*LEGACY_TYPES, name="restauranttype")
     with op.batch_alter_table("restaurants", recreate="always") as batch_op:
         batch_op.alter_column(

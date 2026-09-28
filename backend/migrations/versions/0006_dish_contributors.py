@@ -25,23 +25,51 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("dishes", recreate="always") as batch_op:
-        batch_op.add_column(sa.Column("added_by_user_id", sa.Integer(), nullable=True))
-        batch_op.add_column(
+    if op.get_bind().dialect.name == "postgresql":
+        # Postgres adds columns and constraints directly. The recreate below is
+        # SQLite-only: it cannot add a column with a foreign key in one step,
+        # so the table is copied. Forcing that dance here fails — dropping the
+        # primary key is refused while reviews depend on it.
+        op.add_column(
+            "dishes", sa.Column("added_by_user_id", sa.Integer(), nullable=True)
+        )
+        op.add_column(
+            "dishes",
             sa.Column(
                 "created_at",
                 sa.DateTime(),
                 nullable=False,
                 server_default=sa.func.now(),
-            )
+            ),
         )
-        batch_op.create_foreign_key(
+        op.create_foreign_key(
             "fk_dishes_added_by_user_id_users",
+            "dishes",
             "users",
             ["added_by_user_id"],
             ["id"],
             ondelete="SET NULL",
         )
+    else:
+        with op.batch_alter_table("dishes", recreate="always") as batch_op:
+            batch_op.add_column(
+                sa.Column("added_by_user_id", sa.Integer(), nullable=True)
+            )
+            batch_op.add_column(
+                sa.Column(
+                    "created_at",
+                    sa.DateTime(),
+                    nullable=False,
+                    server_default=sa.func.now(),
+                )
+            )
+            batch_op.create_foreign_key(
+                "fk_dishes_added_by_user_id_users",
+                "users",
+                ["added_by_user_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
     # Server defaults are a migration-time convenience only; the model declares
     # the real default in Python.
     with op.batch_alter_table("dishes") as batch_op:
@@ -49,6 +77,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        op.drop_constraint(
+            "fk_dishes_added_by_user_id_users", "dishes", type_="foreignkey"
+        )
+        op.drop_column("dishes", "created_at")
+        op.drop_column("dishes", "added_by_user_id")
+        return
+
     with op.batch_alter_table("dishes", recreate="always") as batch_op:
         batch_op.drop_constraint("fk_dishes_added_by_user_id_users", type_="foreignkey")
         batch_op.drop_column("created_at")

@@ -1329,8 +1329,8 @@ def _limit_upload(user_id: int, request: Request) -> None:
                 INSERT INTO rate_limits (scope, client_key, window_start, count)
                 VALUES ('upload', :key, :window, 1)
                 ON CONFLICT (scope, client_key, window_start)
-                DO UPDATE SET count = count + 1
-                RETURNING count
+                DO UPDATE SET count = rate_limits.count + 1
+                RETURNING rate_limits.count
                 """
             ),
             {"key": f"user:{user_id}", "window": window},

@@ -1,0 +1,36 @@
+# Render blueprint for Tabiko. Free tier: no card, sleeps when idle.
+#
+# What this buys over the tunnel: the app runs on Render's machines, not
+# yours, and the data lives in Supabase Postgres rather than a file on your
+# disk. What it costs: cold starts after idle, and uploads live on ephemeral
+# disk (photos vanish on restart — see DEPLOY.md).
+#
+# The database URL is set on the Render dashboard, never here: it carries the
+# Supabase password. Everything else is safe to commit.
+#
+# Two singletons are load-bearing, not incidental:
+#   - numInstances: 1. SQLite thinking does not apply here, but there is still
+#     exactly one writer by design; more instances gain nothing for this app
+#     and multiply connection usage against a small free database.
+#   - The health check is /health/live (liveness only). /health touches the
+#     database, which makes it a readiness probe that fails during deploys
+#     for no reason.
+
+services:
+  - type: web
+    name: tabiko
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    numInstances: 1
+    healthCheckPath: /health/live
+    envVars:
+      - key: TABIKO_ENV
+        value: production
+      - key: TABIKO_DATABASE_URL
+        sync: false
+      - key: TABIKO_JWT_SECRET
+        sync: false
+      - key: TABIKO_WORKERS
+        value: 1
+      - key: TABIKO_CORS_ORIGINS
+        value: ""

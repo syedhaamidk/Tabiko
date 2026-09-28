@@ -22,6 +22,14 @@ reviewer_type = sa.Enum(
 
 
 def upgrade() -> None:
+    # On PostgreSQL these types have to exist before any column can use them,
+    # and batch-mode ADD COLUMN does not create them the way CREATE TABLE does.
+    # SQLite has no enum types at all (it stores VARCHAR), so this is a no-op
+    # there by dialect, not by flag — nothing about the SQLite path changes.
+    if op.get_bind().dialect.name == "postgresql":
+        noise_level.create(op.get_bind(), checkfirst=True)
+        reviewer_type.create(op.get_bind(), checkfirst=True)
+
     with op.batch_alter_table("restaurants") as batch_op:
         batch_op.add_column(
             sa.Column(

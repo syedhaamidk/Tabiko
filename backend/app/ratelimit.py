@@ -102,8 +102,8 @@ def _hit(scope: str, key: str, now: float) -> int:
                 INSERT INTO rate_limits (scope, client_key, window_start, count)
                 VALUES (:scope, :key, :window, 1)
                 ON CONFLICT (scope, client_key, window_start)
-                DO UPDATE SET count = count + 1
-                RETURNING count
+                DO UPDATE SET count = rate_limits.count + 1
+                RETURNING rate_limits.count
                 """
             ),
             {"scope": scope, "key": key, "window": window},
