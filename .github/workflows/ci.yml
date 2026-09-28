@@ -158,7 +158,14 @@ jobs:
           TABIKO_ENV: production
           TABIKO_JWT_SECRET: ci-only-secret-that-is-long-enough-to-pass-validation
         run: |
-          docker run -d --name tabiko -p 8010:8010 tabiko:ci
+          # The env: block above exists in the runner's shell, not in the
+          # container: docker run forwards nothing unless told to with -e.
+          # Without these flags the container boots with no secret, preflight
+          # correctly refuses, and the step fails claiming the image is broken.
+          docker run -d --name tabiko -p 8010:8010 \
+            -e TABIKO_ENV="$TABIKO_ENV" \
+            -e TABIKO_JWT_SECRET="$TABIKO_JWT_SECRET" \
+            tabiko:ci
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8010/health/live >/dev/null 2>&1; then
               echo "container is serving"
