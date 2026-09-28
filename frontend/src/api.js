@@ -1,4 +1,12 @@
-const BASE_URL = "/api";
+/**
+ * Where the API lives. Same-origin by default (`/api`), which is the Docker
+ * deployment and local dev behind the Vite proxy. When the frontend is hosted
+ * elsewhere (e.g. Vercel) while the API stays put, set VITE_API_URL to the
+ * API's origin — `https://<app>.onrender.com` — and every call below becomes
+ * absolute. A public URL, not a secret, so a build-time variable is fine.
+ */
+const API_ROOT = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const BASE_URL = `${API_ROOT}/api`;
 const TOKEN_KEY = "tabiko_token";
 const REFRESH_KEY = "tabiko_refresh";
 

@@ -259,3 +259,33 @@ describe("google sign-in", () => {
     expect(fetchMock().mock.calls[0][0]).toBe("/api/auth/providers");
   });
 });
+
+describe("split frontend", () => {
+  it("prefixes every call with VITE_API_URL when it is set", async () => {
+    // A fresh module read, because the base URL is computed once at import.
+    vi.resetModules();
+    vi.stubEnv("VITE_API_URL", "https://tabiko-api.onrender.com/");
+    const split = await import("./api");
+
+    fetchMock().mockResolvedValue(jsonResponse({ ok: true }));
+    await split.listFavorites();
+
+    // Trailing slash tolerated, /api prefix kept: the backend serves every
+    // route under it in production (dev strips it in the Vite proxy).
+    expect(fetchMock().mock.calls[0][0]).toBe(
+      "https://tabiko-api.onrender.com/api/favorites",
+    );
+
+    vi.unstubAllEnvs();
+    vi.resetModules();
+    api = await import("./api");
+  });
+
+  it("keeps relative URLs when VITE_API_URL is unset", async () => {
+    fetchMock().mockResolvedValue(jsonResponse({ ok: true }));
+    await api.listFavorites();
+
+    // Same-origin Docker deploys and local dev: no origin at all.
+    expect(fetchMock().mock.calls[0][0]).toBe("/api/favorites");
+  });
+});

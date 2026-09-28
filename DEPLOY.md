@@ -118,6 +118,29 @@ is no `--force` because wiping a database is a decision, not a flag.
 
 Confirm: `curl https://<your-app>.onrender.com/stats` → `places: 7683`.
 
+### 4. Frontend on Vercel (optional)
+
+Render already serves the whole app on one origin, so this is strictly
+optional — a faster global CDN for the shell, at the cost of two origins
+that must agree with each other. Skip it and nothing breaks.
+
+1. Vercel dashboard → **Add New → Project** → your fork. When asked:
+   - **Root Directory:** `frontend` (not the repo root).
+   - **Build Command / Output:** leave the auto-detected Vite defaults.
+   - **Environment Variables:** `VITE_API_URL` = `https://<your-app>.onrender.com`
+     (Production). The URL is baked into the bundle at build time, so setting
+     it after deploying means deploying again.
+2. Render dashboard → your service → **Environment** → set
+   `TABIKO_CORS_ORIGINS` to `https://<your-vercel-app>.vercel.app` → Save.
+   Without this, saving places and unfollowing people break while everything
+   else works — those are the only buttons that send PUT/DELETE, the only
+   methods that trigger preflights.
+3. If you did the Google step: add the Vercel URL to the OAuth client's
+   **Authorized JavaScript origins** too, or Google will not issue tokens to it.
+
+Confirm: open the Vercel URL, save a place while signed in, unfollow someone.
+If both work, the origins agree.
+
 ### 4. Google sign-in on production (optional, after the URL exists)
 
 Google only issues tokens to registered origins, and the production origin

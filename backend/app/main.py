@@ -80,7 +80,11 @@ allowed_origins = (
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    # Every method the client actually sends. Same-origin deployments never
+    # trigger preflights, so a missing PUT/DELETE here is invisible until the
+    # frontend moves to another origin — and then saving places and unfollowing
+    # people break while everything else works.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

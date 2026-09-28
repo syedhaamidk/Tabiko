@@ -334,6 +334,28 @@ def test_the_policy_opens_exactly_three_directives_for_google(client, monkeypatc
     assert "frame-ancestors 'none'" in policy
 
 
+def test_preflight_allows_every_method_the_client_sends(client):
+    """PUT and DELETE are how places get saved and people get unfollowed.
+
+    Same-origin deployments never trigger preflights, so a missing method
+    here is invisible until the frontend moves to another origin — and then
+    exactly those two buttons break while everything else works.
+    """
+
+    for method in ("PUT", "DELETE", "PATCH", "POST", "GET"):
+        response = client.options(
+            "/favorites/1",
+            headers={
+                # A configured dev origin: the methods list is what is under
+                # test here, not origin matching.
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": method,
+            },
+        )
+        allowed = response.headers.get("access-control-allow-methods", "")
+        assert method in allowed, f"{method} missing from {allowed!r}"
+
+
 def test_authenticated_responses_are_not_cached(client):
     for path in ("/favorites", "/auth/me"):
         response = client.get(path)

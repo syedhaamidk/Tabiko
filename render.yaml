@@ -35,4 +35,4 @@ services:
       - key: TABIKO_WORKERS
         value: 1
       - key: TABIKO_CORS_ORIGINS
-        value: ""
+        sync: false
