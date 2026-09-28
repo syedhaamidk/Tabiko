@@ -118,6 +118,23 @@ is no `--force` because wiping a database is a decision, not a flag.
 
 Confirm: `curl https://<your-app>.onrender.com/stats` → `places: 7683`.
 
+### 4. Google sign-in on production (optional, after the URL exists)
+
+Google only issues tokens to registered origins, and the production origin
+doesn't exist until the first deploy — so this comes last:
+
+1. Google Cloud Console → your OAuth client → **Authorized JavaScript
+   origins** → add `https://<your-app>.onrender.com` alongside
+   `http://localhost:5173`.
+2. Render dashboard → your service → **Environment** → add
+   `TABIKO_GOOGLE_CLIENT_ID` with the client ID → **Save** (redeploys).
+3. Open the app: the Google button appears. The server's CSP opens the
+   script, iframe and session-state directives for `accounts.google.com`
+   only while that variable is set — without it the policy stays strict.
+
+Skip this entirely and nothing breaks: no variable means no button and a
+503 on the endpoint, exactly like local dev without one.
+
 ## Day two on the free path
 
 | | |

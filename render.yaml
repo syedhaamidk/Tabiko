@@ -30,6 +30,8 @@ services:
         sync: false
       - key: TABIKO_JWT_SECRET
         sync: false
+      - key: TABIKO_GOOGLE_CLIENT_ID
+        sync: false
       - key: TABIKO_WORKERS
         value: 1
       - key: TABIKO_CORS_ORIGINS

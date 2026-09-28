@@ -8,7 +8,7 @@
 [![Frontend](https://img.shields.io/badge/frontend-React_18_+_Vite-7B2CFF?style=for-the-badge&logo=react&logoColor=white)](frontend/)
 [![Database](https://img.shields.io/badge/database-SQLite_WAL-FF6B35?style=for-the-badge&logo=sqlite&logoColor=white)](backend/app/database.py)
 [![Deploy](https://img.shields.io/badge/deploy-docker_compose-2A0E1E?style=for-the-badge&logo=docker&logoColor=white)](docker-compose.yml)
-[![Tests](https://img.shields.io/badge/tests-657_passing-00D084?style=for-the-badge)](#-verification)
+[![Tests](https://img.shields.io/badge/tests-659_passing-00D084?style=for-the-badge)](#-verification)
 [![OSM](https://img.shields.io/badge/data-©_OpenStreetMap_contributors-7EBC6F?style=for-the-badge)](https://www.openstreetmap.org/copyright)
 [![License](https://img.shields.io/badge/license-MIT-00D084?style=for-the-badge)](LICENSE)
 
@@ -221,9 +221,9 @@ No client secret is needed and none is stored: the Identity Services button flow
 
 | Suite | Count |
 |---|---|
-| Backend (`cd backend && pytest -q`) | **478 passing** |
+| Backend (`cd backend && pytest -q`) | **480 passing** |
 | Frontend (`cd frontend && npm test`) | **158 passing** |
-| Total | **657 passing** |
+| Total | **659 passing** |
 | Lint / format / migrations | `ruff check`, `ruff format --check`, `alembic check` — clean |
 | Security audit | `npm audit --audit-level=high` — clean |
 
@@ -264,7 +264,7 @@ tabiko/
 │   ├── migrations/     Alembic — the sole schema authority (9 revisions)
 │   ├── scripts/        build_city · backup/restore · preflight · probes · seed_reference_data
 │   ├── data/           osm_snapshot.json.gz + city_provenance.json (the reproducible pin)
-│   └── tests/          478 tests
+│   └── tests/          480 tests
 ├── frontend/
 │   ├── src/            App · 16 components · theme + auth contexts · api client
 │   ├── scripts/        neighborhood + citywide map builders · PWA icon rasteriser

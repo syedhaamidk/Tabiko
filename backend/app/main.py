@@ -101,16 +101,25 @@ async def add_security_headers(request: Request, call_next):
     # The API returns JSON and the shell is a static file, so nothing here needs
     # to execute inline. 'unsafe-inline' for styles is required by the festival
     # styling, and 'unsafe-eval' is not permitted at all.
+    #
+    # Google Identity Services is the one exception, and only when this
+    # deployment actually configured it: its script, its button iframe, and its
+    # session-state requests all come from accounts.google.com. Without these
+    # three the button silently never loads — and only in production, because
+    # the Vite dev server does not send these headers. Gating on the client ID
+    # keeps deployments without Google sign-in at the strict policy.
+    google_sources = " https://accounts.google.com" if auth.GOOGLE_CLIENT_ID else ""
     response.headers.setdefault(
         "Content-Security-Policy",
         "default-src 'self'; "
-        "script-src 'self'; "
+        f"script-src 'self'{google_sources}; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data:; "
-        "connect-src 'self'; "
+        f"connect-src 'self'{google_sources}; "
         "object-src 'none'; "
         "base-uri 'self'; "
+        f"frame-src 'self'{google_sources}; "
         "frame-ancestors 'none'",
     )
     if request.url.scheme == "https":

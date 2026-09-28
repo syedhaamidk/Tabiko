@@ -305,6 +305,35 @@ def test_security_headers_are_present_on_api_responses(client):
     assert "unsafe-eval" not in policy
 
 
+def test_the_policy_names_no_google_origin_without_google_sign_in(client):
+    """Deployments without a client ID keep the strict policy.
+
+    Allowing accounts.google.com unconditionally would widen every
+    deployment's script surface for a feature most of them do not use.
+    """
+
+    policy = client.get("/stats").headers["Content-Security-Policy"]
+
+    assert "accounts.google.com" not in policy
+
+
+def test_the_policy_opens_exactly_three_directives_for_google(client, monkeypatch):
+    """The button needs its script, its iframe, and its session-state
+    requests — and nothing else. Without all three it silently never loads,
+    and only in production, because the dev server sends no CSP at all."""
+
+    monkeypatch.setattr(auth, "GOOGLE_CLIENT_ID", "test.apps.googleusercontent.com")
+    policy = client.get("/stats").headers["Content-Security-Policy"]
+
+    assert "script-src 'self' https://accounts.google.com" in policy
+    assert "connect-src 'self' https://accounts.google.com" in policy
+    assert "frame-src 'self' https://accounts.google.com" in policy
+    # Still strict everywhere else: no eval, no objects, no framing of us.
+    assert "unsafe-eval" not in policy
+    assert "object-src 'none'" in policy
+    assert "frame-ancestors 'none'" in policy
+
+
 def test_authenticated_responses_are_not_cached(client):
     for path in ("/favorites", "/auth/me"):
         response = client.get(path)
