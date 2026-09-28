@@ -188,6 +188,27 @@ def _row(engine, table: str) -> list:
 # ---------- refusal paths: no server needed ----------
 
 
+def test_bare_postgres_scheme_names_the_project_driver():
+    """Dashboards hand out `postgresql://` with no driver, which SQLAlchemy
+    reads as psycopg2 — a driver this project does not install. Accept the
+    dashboard's form rather than failing on ModuleNotFoundError."""
+
+    from app.database import normalize_url
+
+    assert (
+        normalize_url("postgresql://u:p@host:5432/db")
+        == "postgresql+psycopg://u:p@host:5432/db"
+    )
+
+
+def test_an_explicit_driver_is_never_overridden():
+    from app.database import normalize_url
+
+    url = "postgresql+psycopg://u:p@host:5432/db"
+    assert normalize_url(url) == url
+    assert normalize_url("sqlite:///tabiko.db") == "sqlite:///tabiko.db"
+
+
 def test_refuses_a_non_postgres_target(tmp_path):
     assert (
         transfer_city.main(

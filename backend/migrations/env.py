@@ -7,13 +7,13 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 import app.models  # noqa: F401
-from app.database import DATABASE_URL, Base
+from app.database import DATABASE_URL, Base, normalize_url
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = os.getenv("TABIKO_DATABASE_URL", DATABASE_URL)
+database_url = normalize_url(os.getenv("TABIKO_DATABASE_URL", DATABASE_URL))
 config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 

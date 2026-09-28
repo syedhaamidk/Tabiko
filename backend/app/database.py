@@ -18,8 +18,25 @@ from sqlalchemy.pool import StaticPool
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_DATABASE_PATH = BACKEND_DIR / "tabiko.db"
-DATABASE_URL = os.getenv(
-    "TABIKO_DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
+
+
+def normalize_url(url: str) -> str:
+    """Accept the URL form dashboards actually hand out.
+
+    Supabase (and most Postgres hosts) give `postgresql://...` with no driver,
+    which SQLAlchemy reads as "use psycopg2" — a driver this project does not
+    install or test against. The project's driver is psycopg v3, so the bare
+    scheme is rewritten to name it. Anything already naming a driver passes
+    through untouched, so an explicit choice is never overridden.
+    """
+
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url[len("postgresql://") :]
+    return url
+
+
+DATABASE_URL = normalize_url(
+    os.getenv("TABIKO_DATABASE_URL", f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}")
 )
 
 engine_options: dict[str, object] = {"pool_pre_ping": True}

@@ -352,8 +352,10 @@ def _if_empty_remote(url: str) -> int:
 
     from sqlalchemy import create_engine, text
 
+    from app.database import normalize_url
+
     try:
-        engine = create_engine(url, future=True)
+        engine = create_engine(normalize_url(url), future=True)
     except Exception as exc:  # noqa: BLE001 - reported, not raised
         log(f"Could not reach the database ({exc}). Refusing to boot blind.")
         return 1

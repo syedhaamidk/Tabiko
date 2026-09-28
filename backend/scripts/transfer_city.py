@@ -140,13 +140,17 @@ def main(argv: list[str] | None = None) -> int:
 
     source_url = f"sqlite:///{args.source.as_posix()}"
     source_engine = create_engine(source_url, future=True)
-    target_engine = create_engine(args.target, future=True)
+
+    from app.database import normalize_url
+
+    target_url = normalize_url(args.target)
+    target_engine = create_engine(target_url, future=True)
 
     try:
         from scripts.build_city import migrate as migrate_target
 
         log("migrating the target to head...")
-        migrate_target(args.target)
+        migrate_target(target_url)
 
         present = table_names(target_engine)
         missing = [table for table in TABLE_ORDER if table not in present]
