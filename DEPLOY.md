@@ -4,8 +4,24 @@
 
 # Deploying Tabiko for free
 
-One small machine, one persistent volume, TLS included — on Fly.io's free
-allowance. No server to manage, no domain to buy.
+Two ways, both $0 and neither asks for a card.
+
+**Right now, no account:** a Cloudflare quick tunnel in front of your local
+Docker deployment. Public HTTPS URL in a minute, runs as long as your machine
+and the container do. The URL is random and changes every restart — for sharing
+with friends, not for launching.
+
+```bash
+# the app must already be up: docker compose up -d --build
+cloudflared tunnel --url http://localhost:8010
+# → https://<random-words>.trycloudflare.com
+```
+
+Get `cloudflared` from https://github.com/cloudflare/cloudflared/releases
+(`cloudflared-windows-amd64.exe` on Windows, no install, no signup). Confirm
+with `curl https://<your-url>/stats` — `places` should read **7683**.
+
+**Longer-lived:** Fly.io below — stable URL, sleeps when idle, still free.
 
 **✦ FREE ✦ ONE COMMAND DEPLOYS ✦ SLEEPS WHEN IDLE ✦**
 
