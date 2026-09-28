@@ -88,8 +88,11 @@ jobs:
             echo "::error::preflight passed with no signing secret"
             fail=1
           fi
-          TABIKO_JWT_SECRET=dev-only-secret-change-me-before-production-0000000000000000 \
-            python -m scripts.preflight || { echo "::error::preflight accepted the dev secret"; fail=1; }
+          if TABIKO_JWT_SECRET=dev-only-secret-change-me-before-production-0000000000000000 \
+            python -m scripts.preflight; then
+            echo "::error::preflight accepted the dev secret"
+            fail=1
+          fi
           TABIKO_JWT_SECRET=${{ secrets.TABIKO_JWT_SECRET || 'a-long-enough-secret-for-this-check-only' }} \
             python -m scripts.preflight || { echo "::error::preflight failed on a sane config"; fail=1; }
           exit $fail
