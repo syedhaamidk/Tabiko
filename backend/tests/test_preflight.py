@@ -548,7 +548,10 @@ def test_the_schema_check_survives_any_working_directory(tmp_path, monkeypatch):
     absolute, so the check is where it is run from.
     """
 
-    for directory in (tmp_path, Path("C:/"), Path(preflight.BACKEND)):
+    # `tmp_path.anchor` is the filesystem root on any OS (`C:\` here, `/`
+    # elsewhere). It exists everywhere, unlike a hardcoded `C:/`, and it is
+    # never the repo — which is the property this test actually needs.
+    for directory in (tmp_path, Path(tmp_path.anchor), Path(preflight.BACKEND)):
         monkeypatch.chdir(directory)
         result = preflight.check_schema()
 

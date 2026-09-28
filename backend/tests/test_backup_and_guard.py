@@ -318,6 +318,14 @@ def test_a_restore_will_not_clobber_without_force(live, tmp_path):
     assert database.read_bytes() == original
 
 
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason=(
+        "Windows refuses to replace a file another process holds open, which "
+        "is what this refusal is for. POSIX lets the replace succeed, so the "
+        "locked-database path this test exercises cannot trigger there."
+    ),
+)
 def test_a_restore_reports_clearly_when_the_database_is_locked(live, tmp_path):
     """The bug this script's first draft had, found by actually running it.
 

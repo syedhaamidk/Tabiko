@@ -131,6 +131,25 @@ def rate_limit_db(tmp_path, monkeypatch):
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _rate_limiter_uses_test_database(db_engine, monkeypatch):
+    """Point the rate limiter at the test database, never the developer's.
+
+    The limiter resolves its connection from `app.database.engine` at call
+    time rather than using the request's session, so without this every test
+    that touches a rate-limited endpoint writes to the real development
+    database. That file happens to exist — with the table — on a developer
+    machine, and never exists on a fresh checkout, where the whole file then
+    errors with `no such table: rate_limits`. Tests that need a file-backed
+    database (the two-process tests) bring their own fixture, which applies
+    after this one and wins.
+    """
+
+    from app import database as database_module
+
+    monkeypatch.setattr(database_module, "engine", db_engine)
+
+
 @pytest.fixture
 def seeded_data(session_factory) -> dict[str, int]:
     user = _ensure_test_user(session_factory)
