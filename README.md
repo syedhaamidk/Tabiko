@@ -58,6 +58,8 @@ docker compose up -d --build
 
 Open **http://127.0.0.1:8010** — API + frontend on one origin. First boot builds the city from the committed snapshot (~7,683 places), migrates, and serves.
 
+> Taking it public for free? See **[DEPLOY.md](DEPLOY.md)** — one Fly.io machine, one persistent volume, TLS included, sleep-when-idle.
+
 ### Local development
 
 **Backend** — `http://127.0.0.1:8010` · Swagger at `/docs`

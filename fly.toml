@@ -1,0 +1,39 @@
+# Fly.io deployment for Tabiko. Free-tier friendly: one shared-CPU machine,
+# one 1 GB volume, sleep-when-idle.
+#
+# The volume is the whole ball game: SQLite lives at /data/tabiko.db, and
+# without the mount every deploy would rebuild an empty city and lose every
+# dish, review and account. Do not run a second machine against this app:
+# two writers on one SQLite file is corruption, not scaling.
+#
+# Secrets (TABIKO_JWT_SECRET) are set with `fly secrets set`, never in this
+# file and never committed. See DEPLOY.md.
+
+app = "tabiko"
+primary_region = "bom"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8010
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  grace_period = "60s"
+  interval = "30s"
+  method = "GET"
+  path = "/health/live"
+  timeout = "5s"
+
+[[mounts]]
+  source = "tabiko_data"
+  destination = "/data"
+
+[env]
+  TABIKO_ENV = "production"
+  TABIKO_DATABASE_URL = "sqlite:////data/tabiko.db"
+  TABIKO_WORKERS = "1"
