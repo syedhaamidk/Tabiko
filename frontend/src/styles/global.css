@@ -2514,7 +2514,7 @@ body[data-motion="subtle-shine-sweep"] .restaurant-card { animation: shineSweep 
   .app-header { padding-inline: 1rem; }
   .hero-copy { margin-top: 3rem; }
   .hero-copy h1 { font-size: clamp(2.2rem, 14vw, 4rem); }
-  .hero-copy__stats { display: grid; justify-content: start; text-align: left; }
+  .hero-copy__stats { display: grid; justify-content: stretch; text-align: left; }
   .auth-bar { align-items: stretch; flex-direction: column; }
   .auth-bar--guest > div { width: 100%; }
   .auth-bar--guest .app-button { flex: 1; }
