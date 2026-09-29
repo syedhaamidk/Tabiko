@@ -2521,6 +2521,13 @@ body[data-motion="subtle-shine-sweep"] .restaurant-card { animation: shineSweep 
   /* Narrow screens stack the bar, so the actions row centers instead of
      clinging left under a full-width note. */
   .auth-bar__actions { justify-content: center; }
+  /* The flavor sticker is the third rendering of the cuisine label (eyebrow
+     and tag pill already say it), and it is absolutely positioned at a fixed
+     offset that lands on the name row of narrow cards - measured covering the
+     name's first letters. Content wins over decor where only one fits.
+     Doubled specificity on purpose: the base rule below wins ties on source
+     order, so a flat selector here would silently do nothing. */
+  .restaurant-card .restaurant-card__flavor-sticker { display: none; }
   .craving-search__control { flex-wrap: wrap; }
   .craving-search input { flex-basis: 100%; }
   .craving-search__control .app-button { flex: 1; }
