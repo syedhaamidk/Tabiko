@@ -203,6 +203,64 @@ Store. Until then, this is the mobile app.
 
 ---
 
+## Native app via Capacitor (a real download, not a shortcut)
+
+The scaffolding is committed: `frontend/capacitor.config.json` (app ID
+`com.tabiko.app`), `frontend/android/` and `frontend/ios/` projects, with
+location permissions already wired (Android manifest + iOS usage string) so
+nearby sorting works inside the WebView. The bundled `dist/` means the
+offline map keeps working — this is not a thin frame around the website.
+
+> **What it costs, plainly.** Google Play: $25 one-time developer account.
+> Apple: $99/year plus a Mac to build on (iOS cannot be built on Windows or
+> Linux). No way around either; budget them before starting.
+
+### Build it (Android — free tools, your machine)
+
+```bash
+cd frontend
+# The bundle MUST point at production first: a native build with the default
+# relative /api calls a backend that does not exist inside the WebView.
+VITE_API_URL=https://tabiko.onrender.com npm run mobile:sync
+npx cap open android
+```
+
+In Android Studio: **Build → Build Bundle(s) / APK(s) → Android App
+Bundle**. The first release build needs a signing key (**Build → Generate
+Signed Bundle** — back the keystore up somewhere that is not this laptop;
+losing it means losing the app listing forever). Upload the `.aab` to a
+Play Console release ($25 account). Bump `versionCode` in
+`android/app/build.gradle` for every later release or Play rejects it.
+
+### Build it (iOS — Mac only)
+
+```bash
+cd frontend
+VITE_API_URL=https://tabiko.onrender.com npm run mobile:sync
+npx cap open ios
+```
+
+Xcode: pick the Team (paid Apple Developer account), **Product →
+Archive**, distribute via TestFlight, then the App Store. Bump the marketing
+version per release.
+
+### Rules that survive contact with the stores
+
+- **Package name `com.tabiko.app` is permanent once published.** It can be
+  changed any time before the first upload, never after.
+- **Rebuild before every sync.** `mobile:sync` builds then copies; running
+  `cap sync` alone ships yesterday's bundle into today's native shell.
+- **Permissions are declared, not requested in JS.** Location works through
+  the existing `navigator.geolocation` calls — the manifest entries and the
+  iOS usage string are already in place, and both platforms prompt at
+  runtime on first use.
+- **Icons come from the same geometry.** Launcher, splash screens and the
+  iOS icon are painted by `frontend/scripts/build-native-icons.mjs` from the
+  same 64-unit design space as `BrandMark.jsx` — rerun it if the mark ever
+  changes, the way `npm run icons` covers the PWA set.
+
+---
+
 <div align="center">
 
 *Cooked up with masala & main-character energy*

@@ -31,3 +31,15 @@ probe_*.txt
 *.scratch
 backups/
 *.pre-restore-*
+
+# Native build outputs. The android/ and ios/ projects themselves ARE
+# committed (native config lives there); only machine-generated build
+# products stay out.
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/capacitor-cordova-android-plugins/
+frontend/ios/build/
+frontend/ios/DerivedData/
+frontend/ios/App/Pods/

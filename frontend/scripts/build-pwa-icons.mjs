@@ -82,7 +82,7 @@ function innerFlameDistance(px, py) {
  * @param scale   mark size relative to the canvas; 1 fills it
  * @param padding keep-out for maskable icons, as a fraction of the canvas
  */
-function paintIcon(size, { scale = 1, inset = 0 } = {}) {
+export function paintIcon(size, { scale = 1, inset = 0 } = {}) {
   const pixels = Buffer.alloc(size * size * 4);
   const SS = 3; // supersamples per axis
   const unit = (size / 64) * scale;
@@ -172,10 +172,10 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-function encodePng(pixels, size) {
+export function encodePng(pixels, width, height = width) {
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
   ihdr[9] = 6; // colour type: RGBA
   ihdr[10] = 0; // deflate
@@ -183,9 +183,9 @@ function encodePng(pixels, size) {
   ihdr[12] = 0; // no interlace
 
   // One filter byte (0 = None) per scanline.
-  const stride = size * 4;
-  const raw = Buffer.alloc((stride + 1) * size);
-  for (let y = 0; y < size; y += 1) {
+  const stride = width * 4;
+  const raw = Buffer.alloc((stride + 1) * height);
+  for (let y = 0; y < height; y += 1) {
     raw[y * (stride + 1)] = 0;
     pixels.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
   }
@@ -199,23 +199,26 @@ function encodePng(pixels, size) {
 }
 
 // ---------- emit ----------
+// Guarded so the painters can be imported by build-native-icons.mjs without
+// rebuilding the PWA set as a side effect.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  mkdirSync(OUT_DIR, { recursive: true });
 
-mkdirSync(OUT_DIR, { recursive: true });
+  const TARGETS = [
+    // Any-purpose icons carry the mark with its rounded-square edge.
+    { name: "icon-192.png", size: 192, options: { scale: 1 } },
+    { name: "icon-512.png", size: 512, options: { scale: 1 } },
+    // iOS does not apply rounded masks, so it gets the same square icon.
+    { name: "apple-touch-icon.png", size: 180, options: { scale: 1 } },
+    // Maskable icons are cropped to a circle by some launchers, so the mark is
+    // shrunk into the safe zone on a full-bleed background.
+    { name: "icon-maskable-512.png", size: 512, options: { scale: 0.74, inset: 1 } },
+    { name: "favicon-64.png", size: 64, options: { scale: 1 } },
+  ];
 
-const TARGETS = [
-  // Any-purpose icons carry the mark with its rounded-square edge.
-  { name: "icon-192.png", size: 192, options: { scale: 1 } },
-  { name: "icon-512.png", size: 512, options: { scale: 1 } },
-  // iOS does not apply rounded masks, so it gets the same square icon.
-  { name: "apple-touch-icon.png", size: 180, options: { scale: 1 } },
-  // Maskable icons are cropped to a circle by some launchers, so the mark is
-  // shrunk into the safe zone on a full-bleed background.
-  { name: "icon-maskable-512.png", size: 512, options: { scale: 0.74, inset: 1 } },
-  { name: "favicon-64.png", size: 64, options: { scale: 1 } },
-];
-
-for (const target of TARGETS) {
-  const png = encodePng(paintIcon(target.size, target.options), target.size);
-  writeFileSync(join(OUT_DIR, target.name), png);
-  console.log(`${target.name}  ${target.size}x${target.size}  ${png.length} bytes`);
+  for (const target of TARGETS) {
+    const png = encodePng(paintIcon(target.size, target.options), target.size);
+    writeFileSync(join(OUT_DIR, target.name), png);
+    console.log(`${target.name}  ${target.size}x${target.size}  ${png.length} bytes`);
+  }
 }
