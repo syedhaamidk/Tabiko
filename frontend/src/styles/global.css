@@ -2521,6 +2521,14 @@ body[data-motion="subtle-shine-sweep"] .restaurant-card { animation: shineSweep 
   /* Narrow screens stack the bar, so the actions row centers instead of
      clinging left under a full-width note. */
   .auth-bar__actions { justify-content: center; }
+  /* The Google slot is a fixed 280px iframe next to its divider (~345px
+     together): wider than a phone row, so side-by-side overflows the card.
+     Stacked and centered it always fits, and matches the form views. */
+  .google-signin--inline {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+  }
   /* The flavor sticker is the third rendering of the cuisine label (eyebrow
      and tag pill already say it), and it is absolutely positioned at a fixed
      offset that lands on the name row of narrow cards - measured covering the
