@@ -184,8 +184,9 @@ chains, and review queues, for an app whose offline story — a self-drawn
 map with zero tile requests — already works in a browser. Install it from
 the deployed URL instead (needs HTTPS, so the Vercel address, not localhost):
 
-- **Android (Chrome):** open the app → ⋮ menu → **Install app** (or **Add to
-  Home screen**). It lands on the home screen, opens standalone with no
+- **Android (Chrome):** tap **Take Tabiko to go** in the top bar — or open
+  the app → ⋮ menu → **Install app** (or **Add to Home screen**). It lands
+  on the home screen, opens standalone with no
   browser chrome, and works offline for the map and shell.
 - **iPhone (Safari):** open the app → **Share → Add to Home Screen**. Same
   standalone result. (Apple only offers installation from Safari, not Chrome.)

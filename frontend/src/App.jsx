@@ -8,6 +8,7 @@ import NearbyBar from "./components/NearbyBar";
 import CravingSearchBar from "./components/CravingSearchBar";
 import MapView from "./components/MapView";
 import FriendsFeed from "./components/FriendsFeed";
+import InstallButton from "./components/InstallButton";
 import AuthBar from "./components/AuthBar";
 import BrandMark from "./components/BrandMark";
 import InterfaceIcon from "./components/InterfaceIcon";
@@ -291,6 +292,7 @@ function MainApp() {
               <span><InterfaceIcon name="spice" size={14} /> Street-food energy</span>
               <span><InterfaceIcon name="group" size={14} /> Community table</span>
             </div>
+            <InstallButton />
           </nav>
 
           <HeroCollage />
