@@ -95,6 +95,32 @@ describe("GoogleSignIn", () => {
     expect(renderButton).toHaveBeenCalledTimes(1);
   });
 
+  it("requests the pill variant that sits inline with the email buttons", async () => {
+    const { renderButton } = fakeGis();
+    render(<GoogleSignIn onDone={() => {}} />);
+
+    await waitFor(() => expect(renderButton).toHaveBeenCalled());
+    // Shape and text are Google's vocabulary, not styling — the point is the
+    // button reads as one of the row's actions rather than a banner, and says
+    // what it does for both new and returning readers.
+    expect(renderButton).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ shape: "pill", text: "continue_with" }),
+    );
+  });
+
+  it("keeps the divider next to the button slot", async () => {
+    fakeGis();
+    const { container } = render(<GoogleSignIn onDone={() => {}} />);
+
+    await waitFor(() => screen.getByTestId("google-button-slot"));
+    // The divider must be impossible to render without the button after it:
+    // both live or die on the same clientId.
+    const wrapper = container.querySelector(".google-signin");
+    expect(wrapper.textContent).toMatch(/or/);
+    expect(wrapper.querySelector('[data-testid="google-button-slot"]')).not.toBeNull();
+  });
+
   it("sends the credential to the backend and reports back", async () => {
     const { initialize } = fakeGis();
     const onDone = vi.fn();

@@ -310,6 +310,71 @@ textarea:focus-visible {
   font-weight: 600;
 }
 
+/* The row of ways in: email buttons plus the Google button, when it exists.
+   One flex row so the Google pill sits beside Log in / Sign up rather than
+   stranded on its own line underneath them. */
+.auth-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+/* The "or" between email and Google. A micro-kicker in the app's voice rather
+   than a bare conjunction, flanked by the same sparkles the marquee uses. It
+   lives inside the Google component, next to the slot, so it can never render
+   without a button after it. */
+.auth-divider {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 52%, transparent);
+  white-space: nowrap;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "✦";
+  font-size: 0.58rem;
+  opacity: 0.5;
+}
+
+/* Google draws the button (their branding rules require it); this owns how it
+   sits. Inline joins the actions row; block stacks full-width under a form. */
+.google-signin {
+  display: inline-flex;
+  align-items: center;
+}
+
+.google-signin--inline {
+  gap: 0.55rem;
+}
+
+.google-signin--inline > span[data-testid] {
+  display: inline-flex;
+}
+
+.google-signin--block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-basis: 100%;
+  gap: 0.45rem;
+}
+
+.google-signin--block .auth-divider {
+  justify-content: center;
+}
+
+.google-signin--block > span[data-testid] {
+  display: flex;
+  justify-content: center;
+}
+
 .auth-avatar {
   display: grid;
   width: 42px;
@@ -2394,6 +2459,9 @@ body[data-motion="subtle-shine-sweep"] .restaurant-card { animation: shineSweep 
   .auth-bar { align-items: stretch; flex-direction: column; }
   .auth-bar--guest > div { width: 100%; }
   .auth-bar--guest .app-button { flex: 1; }
+  /* Narrow screens stack the bar, so the actions row centers instead of
+     clinging left under a full-width note. */
+  .auth-bar__actions { justify-content: center; }
   .craving-search__control { flex-wrap: wrap; }
   .craving-search input { flex-basis: 100%; }
   .craving-search__control .app-button { flex: 1; }

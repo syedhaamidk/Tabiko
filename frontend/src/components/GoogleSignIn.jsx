@@ -45,11 +45,19 @@ export function _resetGisForTests() {
  * component owns the loading, the callback wiring, and the error states
  * around it, and nothing visual.
  *
+ * The "or" divider lives inside, next to the slot, for one reason: it must be
+ * impossible for a divider to render without a button after it. A divider
+ * that outlives a failed load reads as a broken promise.
+ *
+ * `layout="inline"` sits the divider and the button in the row with the email
+ * buttons; `layout="block"` stacks them full-width under a form. The caller
+ * picks, and the component guarantees both stay consistent.
+ *
  * The credential Google hands back is an ID token, not a session: it goes to
  * POST /auth/google, which verifies the signature and returns normal Tabiko
  * tokens. It is never stored, never logged, and never sent anywhere else.
  */
-export default function GoogleSignIn({ onDone }) {
+export default function GoogleSignIn({ onDone, layout = "inline" }) {
   const { loginWithGoogle } = useAuth();
   const [clientId, setClientId] = useState(null);
   const [error, setError] = useState(null);
@@ -143,7 +151,10 @@ export default function GoogleSignIn({ onDone }) {
   if (!clientId) return null;
 
   return (
-    <span className="google-signin">
+    <span className={`google-signin google-signin--${layout}`}>
+      <span className="auth-divider" aria-hidden="true">
+        or
+      </span>
       <span ref={buttonRef} data-testid="google-button-slot" />
       {error ? (
         <span className="auth-error" role="alert">

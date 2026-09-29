@@ -131,12 +131,12 @@ export default function AuthBar() {
     return (
       <div className="auth-bar auth-bar--guest">
         <span className="auth-bar__note"><InterfaceIcon name="group" size={17} /> Pull up a chair, flavor chaser</span>
-        <div>
+        <div className="auth-bar__actions">
           <button className="app-button" onClick={() => setMode("login")}>Log in</button>
           <button className="app-button app-button--primary" onClick={() => setMode("register")}>
             <InterfaceIcon name="sparkles" size={16} /> Sign up free
           </button>
-          <GoogleSignIn onDone={() => {}} />
+          <GoogleSignIn layout="inline" onDone={() => {}} />
         </div>
       </div>
     );
@@ -179,6 +179,7 @@ export default function AuthBar() {
       </button>
       <button className="app-button app-button--ghost" type="button" onClick={() => setMode(null)}>Cancel</button>
       <GoogleSignIn
+        layout="block"
         onDone={() => {
           setMode(null);
           setForm({ name: "", email: "", password: "" });
