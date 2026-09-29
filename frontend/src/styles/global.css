@@ -38,6 +38,15 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  /* Notched phones: keep content clear of the camera cutout and the home
+     indicator. Zero everywhere without a notch (the fallback), so desktop is
+     untouched. No fixed header or footer exists to inset separately — the only
+     fixed layers are decorative and pointer-transparent. */
+  padding:
+    env(safe-area-inset-top, 0px)
+    env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
   color: var(--color-text);
   background-color: var(--color-background);
   background-image:

@@ -177,6 +177,31 @@ Skip this entirely and nothing breaks: no variable means no button and a
 
 ---
 
+## Use it on your phone (the mobile app is the website, installed)
+
+There is no native wrapper and none is planned: store fees, two build
+chains, and review queues, for an app whose offline story — a self-drawn
+map with zero tile requests — already works in a browser. Install it from
+the deployed URL instead (needs HTTPS, so the Vercel address, not localhost):
+
+- **Android (Chrome):** open the app → ⋮ menu → **Install app** (or **Add to
+  Home screen**). It lands on the home screen, opens standalone with no
+  browser chrome, and works offline for the map and shell.
+- **iPhone (Safari):** open the app → **Share → Add to Home Screen**. Same
+  standalone result. (Apple only offers installation from Safari, not Chrome.)
+
+The install contract — manifest, icon sizes, notch viewport, offline shell
+that never caches the API — is asserted in `frontend/src/lib/pwa.test.js`,
+because a broken install shows no error: the app just quietly stops being
+installable.
+
+If store presence or push notifications ever justify it, the path is
+Capacitor wrapping this exact codebase (no rewrite): but that means a Mac
+for iOS builds, $25 one-time for Google Play, and $99/year for the App
+Store. Until then, this is the mobile app.
+
+---
+
 <div align="center">
 
 *Cooked up with masala & main-character energy*
